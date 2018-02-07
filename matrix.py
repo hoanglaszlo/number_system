@@ -52,12 +52,12 @@ class NumberSystem:
 		self.matrix = matrix
 		self.digitSet = digitSet
 
+	def hashFunction(self, U, G):
+		return sum((U[i] % G[i,i])*prod(G[j,j] for j in range(i)) for i in range(rank(U)))
+
 	def isCongruent(self, elementOne, elementTwo):
 		G, U, V = m.smith_form()
 		return self.hashFunction(U*elementOne, G) == self.hashFunction(U*elementTwo, G)
-
-	def hashFunction(self, U, G):
-		return sum((U[i] % G[i,i])*prod(G[j,j] for j in range(i)) for i in range(rank(U)))
 
 	def isCompleteResidues(self):
 		for i in self.digitSet:
@@ -73,7 +73,12 @@ class NumberSystem:
 		tmp = matrix.identity(rank(self.matrix)) - self.matrix
 		return abs(tmp.determinant()) != 1
 
-m = Matrix([[10]])
+	def check(self):
+		if self.isExpansive() and self.unitCondition() and self.isCompleteResidues():
+			return true
+		return false
+
+m = Matrix([10])
 
 numsys = NumberSystem(m, {0,1,2,3,4,5,6,7,8,9})
-numsys.isCompleteResidues()
+numsys.check()
