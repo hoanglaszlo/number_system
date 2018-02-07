@@ -4,7 +4,7 @@ class Matrix:
 	null_element = 0
 	
 	def __init__(self, *args):
-		if not (len(args) == 1 or len(args) == 2):
+		if not (len(args)a == 1 or len(args) == 2):
 			raise TypeError("Only 1 or 2 arguments are accepted (%d given)") % len(args)
 		if len(args) == 2:
 			row, col = args
