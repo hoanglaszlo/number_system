@@ -1,7 +1,15 @@
 import types
+import sys
 
 class Matrix_Error(Exception):
 	pass
+	
+class Square_Error(Matrix_Error):
+	def __init__(self, func):
+		self.func = func
+
+	def __str__(self):
+		return "%s only defined for square matricies." % self.func
 
 class Matrix:
 	def __init__(self, *args):
@@ -28,6 +36,36 @@ class Matrix:
 
 	def __setitem__(self, (row, col), value):
 		self.matrix[row][col] = value
+		
+	@classmethod
+	def makeMatrix(cls, rows):
+		m = len(rows)
+		n = len(rows[0])
+
+		if any([len(row) != n for row in rows[1:]]):
+			raise MatrixError, "Not a valid matrix."
+		mat = Matrix(rows)
+
+		return mat
+
+	@classmethod
+	def readConsole(cls):
+		print 'Enter matrix row by row. Type "q" to quit.'
+		rows = []
+		while True:
+			line = sys.stdin.readline().strip()
+			if line=='q': break
+			row = [int(x) for x in line.split()]
+			rows.append(row)
+		return cls.makeMatrix(rows)
+
+	@classmethod
+	def readFile(cls, fname):
+		rows = []
+		for line in open(fname).readlines():
+			row = [int(x) for x in line.split()]
+			rows.append(row)
+		return cls.makeMatrix(rows)
 
 	def rows(self):
 		return len(self.matrix)
@@ -78,7 +116,9 @@ class NumberSystem:
 			return true
 		return false
 
-m = Matrix([10])
+mat = Matrix.readFile("input.txt")
+print mat
+digitSet = {0,1,2,3,4,5,6,7,8,9}
 
-numsys = NumberSystem(m, {0,1,2,3,4,5,6,7,8,9})
-numsys.check()
+#numsys = NumberSystem(mat, digitSet)
+#numsys.check()
