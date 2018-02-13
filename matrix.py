@@ -238,18 +238,24 @@ class NumberSystem:
 		self.digitSet = digitSet
 
 	def hash_function(self, U, G):
-		#TODO: find s pos. int. Is it necessary?
-		return sum((U[i] % G[i,i]) * prod(G[j,j] for j in range(i)) for i in range(rank(U)))
+		s = self.find_in_diagonal(G, 1)
+		return sum((U[i] % G[i,i]) * prod(G[j,j] for j in range(s+1, i)) for i in range(s + 1, rank(U)))
 
 	def is_congruent(self, elementOne, elementTwo):
-		G, U, V = m.smith_form()
+		G, U, V = self.matrix.smith_form()
 		return self.hash_function(U*elementOne, G) == self.hash_function(U*elementTwo, G)
+
+	def find_in_diagonal(self, G, number):
+		for index in xrange(G.rows()):
+			if G[(index, index)] != number:
+				return index 
+		return G.rows()
 
 	def is_complete_residues_system(self):
 		for i in self.digitSet:
 			if any(self.is_congruent(i,j) for j in self.digitSet - {i}):
-				return false
-		return true
+				return False
+		return True
 
 	def is_expansive(self):
 		eigens = self.matrix.eigenvalues()
@@ -261,45 +267,86 @@ class NumberSystem:
 		return abs(tmp.determinant()) != 1
 
 	def check(self):
-		if self.is_expansive() and self.unit_condition() and self.is_complete_residues_system():
-			return true
-		return false
+		if self.is_expansive() and self.is_complete_residues_system():
+			if self.unit_condition():
+				return True
+			else:
+				print "It is okay, but... unit_condition failed"
+		return False
 
 class MatrixTests(unittest.TestCase):
-	def testAdd(self):
+	def test_add_1(self):
 		m1 = Matrix([[1, 2, 3], [4, 5, 6]])
 		m2 = Matrix([[7, 8, 9], [10, 11, 12]])		
 		m3 = m1 + m2
 		self.assertTrue(m3 == Matrix([[8, 10, 12], [14,16,18]]))
+		
+	def test_add_2(self):
+		m1 = Matrix([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+		m2 = Matrix([[7, 8, 9], [10, 11, 12], [13, 14, 15]])		
+		m3 = m1 + m2
+		self.assertTrue(m3 == Matrix([[8, 10, 12], [14,16,18], [20, 22, 24]]))
+		
+	def test_add_3(self):
+		m1 = Matrix([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+		m2 = Matrix.identity(3)		
+		m3 = m1 + m2
+		self.assertTrue(m3 == Matrix([[2, 2, 3], [4, 6, 6], [7, 8, 10]]))
 
-	def testSub(self):
+	def test_sub(self):
 		m1 = Matrix([[1, 2, 3], [4, 5, 6]])
 		m2 = Matrix([[7, 8, 9], [10, 11, 12]])		
 		m3 = m2 - m1
 		self.assertTrue(m3 == Matrix([[6, 6, 6], [6, 6, 6]]))
 
-	def testMul(self):
+	def test_mul(self):
 		m1 = Matrix([[1, 2, 3], [4, 5, 6]])
 		m2 = Matrix([[7, 8], [10, 11], [12, 13]])
+		id = Matrix.identity(3)
 		self.assertTrue(m1 * m2 == Matrix([[63, 69], [150, 165]]))
 		self.assertTrue(m2 * m1 == Matrix([[39, 54, 69], [54, 75, 96], [64, 89, 114]]))
-		
+		self.assertTrue(m1 * id == m1)
+		self.assertTrue(id * m2 == m2)
+
+	def test_det(self):
+		m1 = Matrix([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+		m2 = Matrix([[-1, -1], [1, -1]])
+		m3 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
+		id = Matrix.identity(3)
+		self.assertTrue(m1.determinant() == 0)
+		self.assertTrue(m2.determinant() == 2)
+		self.assertTrue(m3.determinant() == -306)
+		self.assertTrue(id.determinant() == 1)
+
 class NumberSystemTests(unittest.TestCase):
-	def testUnitCondition(self):
-		mat = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
-		digitSet = {0,1,2,3,4,5,6,7,8,9}
+	def test_unit_condition(self):
+		mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
+		digitSet1 = {0,1,2,3,4,5,6,7,8,9}
 
-		numsys = NumberSystem(mat, digitSet)
-		l = numsys.unit_condition()
-		self.assertTrue(l == True)
+		mat2 = Matrix([[-1,-1],[1,-1]])
+		digitSet2 = {(0,0),(1,0)}
 		
-	def testUnitCondition_2(self):
-		mat = Matrix([[-1,-1],[1,-1]])
-		digitSet = {(0,0),(1,0)}
+		self.assertTrue(NumberSystem(mat1, digitSet1).unit_condition() == True)
+		self.assertTrue(NumberSystem(mat2, digitSet2).unit_condition() == True)
+		
+	def test_find_in_diagonal(self):
+		mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
+		mat2 = Matrix([[1,1,1],[4,-2,5],[2,8,7]])
+		mat3 = Matrix([[1,1,1],[4,1,5],[2,8,7]])
+		mat4 = Matrix([[1,1,1],[4,1,5],[2,8,1]])
+		digitSet = {0,1,2,3,4,5,6,7,8,9}
+		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat1, 1) == 0)
+		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat2, 1) == 1)
+		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat3, 1) == 2)
+		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat4, 1) == 3)
 
-		numsys = NumberSystem(mat, digitSet)
-		l = numsys.unit_condition()
-		self.assertTrue(l == True)
+test = True
+if test:
+	if __name__ == "__main__":
+		unittest.main()
+else:
+	mat = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
+	digitSet = {0,1,2,3,4,5,6,7,8,9}
 
-if __name__ == "__main__":
-	unittest.main()
+	numsys = NumberSystem(mat, digitSet)
+	print numsys.find_in_diagonal(mat, 1)
