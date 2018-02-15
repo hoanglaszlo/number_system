@@ -3,6 +3,7 @@ import sys
 import random
 import operator
 import unittest
+from sympy import *
 
 class MatrixError(Exception):
 	pass
@@ -142,13 +143,13 @@ class Matrix:
 	
 	def row(self, i):
 		return self.matrix[i]
-
+		
 	def col(self, j):
 		r = []
 		for row in self.matrix:
 			r.append(row[j])
 		return r
-
+		
 	def rows(self):
 		return len(self.matrix)
 
@@ -193,6 +194,11 @@ class Matrix:
 			return sum
 		else:
 			return (self.matrix[0][0] * self.matrix[1][1] - self.matrix[0][1] * self.matrix[1][0])
+		
+	def smith_form(self):
+		m = Matrix(self.matrix)
+		U, G, V = Solver(m).smith_form()
+		return U, G, V
 
 	@classmethod
 	def make_random(cls, m, n, low=0, high=10):
@@ -239,10 +245,10 @@ class NumberSystem:
 
 	def hash_function(self, U, G):
 		s = self.find_in_diagonal(G, 1)
-		return sum((U[i] % G[i,i]) * prod(G[j,j] for j in range(s+1, i)) for i in range(s + 1, rank(U)))
+		return sum((U[i] % G[i,i]) * prod(G[j,j] for j in range(s + 1, i)) for i in range(s + 1, rank(U)))
 
 	def is_congruent(self, elementOne, elementTwo):
-		G, U, V = self.matrix.smith_form()
+		U, G, V = self.matrix.smith_form()
 		return self.hash_function(U*elementOne, G) == self.hash_function(U*elementTwo, G)
 
 	def find_in_diagonal(self, G, number):
@@ -274,6 +280,85 @@ class NumberSystem:
 				print "It is okay, but... unit_condition failed"
 		return False
 
+class Solver:
+	def __init__(self, matrix):
+		self.matrix = matrix
+		
+	def leftmult2(self, m, i0, i1, a, b, c, d):
+		for j in range(self.matrix.cols()):
+			x, y = m[(i0,j)], m[(i1,j)]
+			m[(i0,j)] = a * x + b * y
+			m[(i1,j)] = c * x + d * y
+	 
+	def rightmult2(self, m, j0, j1, a, b, c, d):
+		for i in range(self.matrix.rows()):
+			x, y = m[(i,j0)], m[(i,j1)]
+			m[(i,j0)] = a * x + c * y
+			m[(i,j1)] = b * x + d * y
+	 
+	def smith_form(self, domain=ZZ):
+		
+		s = Matrix.identity(self.matrix.rows())
+		t = Matrix.identity(self.matrix.cols())
+		last_j = -1
+		for i in range(self.matrix.rows()):
+			for j in range(last_j+1, self.matrix.cols()):
+				if any(i != 0 for i in self.matrix.col(j)):
+					break
+			else:
+				break
+			if self.matrix[(i,j)] == 0:
+				for ii in range(self.matrix.rows()):
+					if self.matrix[ii][j] != 0:
+						break
+				self.leftmult2(self.matrix, i, ii, 0, 1, 1, 0)
+				self.rightmult2(s, i, ii, 0, 1, 1, 0)
+			self.rightmult2(self.matrix, j, i, 0, 1, 1, 0)
+			self.leftmult2(t, j, i, 0, 1, 1, 0)
+			j = i
+			upd = True
+			while upd:
+				upd = False
+				for ii in range(i+1, self.matrix.rows()):
+					if self.matrix[(ii,j)] == 0:
+						continue
+					upd = True
+					if domain.rem(self.matrix[ii, j], self.matrix[i, j]) != 0:
+						coef1, coef2, g = domain.gcdex(self.matrix[i,j], self.matrix[ii, j])
+						coef3 = domain.quo(self.matrix[ii, j], g)
+						coef4 = domain.quo(self.matrix[i, j], g)
+						self.leftmult2(self.matrix,i, ii, coef1, coef2, -coef3, coef4)
+						self.rightmult2(s, i, ii, coef4, -coef2, coef3, coef1)
+					coef5 = domain.quo(self.matrix[ii, j], self.matrix[i, j])
+					self.leftmult2(self.matrix, i, ii, 1, 0, -coef5, 1)
+					self.rightmult2(s, i, ii, 1, 0, coef5, 1)
+				for jj in range(j+1, self.matrix.cols()):
+					if self.matrix[i, jj] == 0:
+						continue
+					upd = True
+					if domain.rem(self.matrix[i, jj], self.matrix[i, j]) != 0:
+						coef1, coef2, g = domain.gcdex(self.matrix[i,j], self.matrix[i, jj])
+						coef3 = domain.quo(self.matrix[i, jj], g)
+						coef4 = domain.quo(self.matrix[i, j], g)
+						self.rightmult2(self.matrix, j, jj, coef1, -coef3, coef2, coef4)
+						self.leftmult2(t, j, jj, coef4, coef3, -coef2, coef1)
+					coef5 = domain.quo(self.matrix[i, jj], self.matrix[i, j])
+					self.rightmult2(self.matrix, j, jj, 1, -coef5, 0, 1)
+					self.leftmult2(t, j, jj, 1, coef5, 0, 1)
+			last_j = j
+		for i1 in range(min(self.matrix.rows(), self.matrix.cols())):
+			for i0 in reversed(range(i1)):
+				coef1, coef2, g = domain.gcdex(self.matrix[i0, i0], self.matrix[i1,i1])
+				if g == 0:
+					continue
+				coef3 = domain.quo(self.matrix[i1, i1], g)
+				coef4 = domain.quo(self.matrix[i0, i0], g)
+				self.leftmult2(self.matrix, i0, i1, 1, coef2, coef3, coef2*coef3-1)
+				self.rightmult2(s, i0, i1, 1-coef2*coef3, coef2, coef3, -1)
+				self.rightmult2(self.matrix, i0, i1, coef1, 1-coef1*coef4, 1, -coef4)
+				self.leftmult2(t, i0, i1, coef4, 1-coef1*coef4, 1, -coef1)
+		return (s, self.matrix, t)
+		
 class MatrixTests(unittest.TestCase):
 	def test_add_1(self):
 		m1 = Matrix([[1, 2, 3], [4, 5, 6]])
@@ -340,13 +425,11 @@ class NumberSystemTests(unittest.TestCase):
 		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat3, 1) == 2)
 		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat4, 1) == 3)
 
-test = True
+test = False
+
 if test:
 	if __name__ == "__main__":
 		unittest.main()
 else:
-	mat = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
+	mat = Matrix([[2,4,4],[-6,6,12],[10,-4,-16]])
 	digitSet = {0,1,2,3,4,5,6,7,8,9}
-
-	numsys = NumberSystem(mat, digitSet)
-	print numsys.find_in_diagonal(mat, 1)
