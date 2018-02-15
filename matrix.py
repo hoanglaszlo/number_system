@@ -4,6 +4,7 @@ import random
 import operator
 import unittest
 from sympy import *
+import copy
 
 class MatrixError(Exception):
 	pass
@@ -90,9 +91,12 @@ class Matrix:
 	def __mul__(self, other):
 		if self.is_scalar_element(other):
 			return self.scalar_multiply(other)
-		if not isinstance(other, Matrix):
+		if  isinstance(other, Matrix):
+			return self.matrix_multiply(other)
+		elif isinstance(other, tuple):
+			return self.tuple_multiply(other)
+		else:
 			raise TypeError("Cannot multiply matrix and type %s" % type(other))
-		return self.matrix_multiply(other)
 
 	def __rmul__(self, other):
 		if not self.is_scalar_element(other):
@@ -125,10 +129,24 @@ class Matrix:
 		else:
 			return Matrix(r)
 
+	def tuple_multiply(self, other):
+		r = []
+		if not isinstance(other, tuple):
+			raise TypeError("Cannot multiply matrix and type %s" % type(other))
+		if not self.cols() == len(other):
+			raise MatrixMultiplicationError(self, other)
+		for row in xrange(self.rows()):
+			r.append([])
+			r[row].append(self.vector_inner_product(self.row(row), other))
+		if len(r) == 1 and len(r[0]) == 1:
+			return r[0][0]
+		else:
+			return Matrix(r)
+			
 	def vector_inner_product(self, a, b):
 		if not isinstance(a, types.ListType):
 			raise TypeError("Only two lists are accepted.")
-		if not isinstance(b, types.ListType):
+		if not isinstance(b, types.ListType) and not isinstance(b, types.TupleType):
 			raise TypeError("Only two lists are accepted.")
 		return reduce(operator.add, map(operator.mul, a, b))
 
@@ -192,11 +210,13 @@ class Matrix:
 				sign *= (-1)
 				t += 1
 			return sum
-		else:
+		elif n == 2:
 			return (self.matrix[0][0] * self.matrix[1][1] - self.matrix[0][1] * self.matrix[1][0])
-		
+		else:
+			return self.matrix[0][0]
+			
 	def smith_form(self):
-		m = Matrix(self.matrix)
+		m = copy.deepcopy(self)
 		U, G, V = Solver(m).smith_form()
 		return U, G, V
 
@@ -245,7 +265,7 @@ class NumberSystem:
 
 	def hash_function(self, U, G):
 		s = self.find_in_diagonal(G, 1)
-		return sum((U[i] % G[i,i]) * prod(G[j,j] for j in range(s + 1, i)) for i in range(s + 1, rank(U)))
+		return sum((U[(i,0)] % G[(i,i)]) * prod(G[(j,j)] for j in range(s, i)) for i in range(s, U.rows()))
 
 	def is_congruent(self, elementOne, elementTwo):
 		U, G, V = self.matrix.smith_form()
@@ -259,8 +279,13 @@ class NumberSystem:
 
 	def is_complete_residues_system(self):
 		for i in self.digitSet:
-			if any(self.is_congruent(i,j) for j in self.digitSet - {i}):
-				return False
+			#if any(self.is_congruent(i,j) for j in self.digitSet - {i}):
+			#	return False
+			for j in self.digitSet:
+				if i != j:
+					if self.is_congruent(i,j):
+						print self.is_congruent(i,j)
+						return False
 		return True
 
 	def is_expansive(self):
@@ -282,7 +307,7 @@ class NumberSystem:
 
 class Solver:
 	def __init__(self, matrix):
-		self.matrix = matrix
+		self.matrix =  matrix
 		
 	def leftmult2(self, m, i0, i1, a, b, c, d):
 		for j in range(self.matrix.cols()):
@@ -297,7 +322,6 @@ class Solver:
 			m[(i,j1)] = b * x + d * y
 	 
 	def smith_form(self, domain=ZZ):
-		
 		s = Matrix.identity(self.matrix.rows())
 		t = Matrix.identity(self.matrix.cols())
 		last_j = -1
@@ -425,11 +449,29 @@ class NumberSystemTests(unittest.TestCase):
 		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat3, 1) == 2)
 		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat4, 1) == 3)
 
+	def test_is_congruent(self):
+		numsys = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
+		
+		self.assertTrue(numsys.is_congruent(10,0) == True)
+		self.assertTrue(numsys.is_congruent(14,4) == True)
+		self.assertTrue(numsys.is_congruent(6,36) == True)
+		self.assertFalse(numsys.is_congruent(13,12) == True)
+		self.assertFalse(numsys.is_congruent(66,43) == True)
+		
+		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+		self.assertFalse(numsys2.is_congruent((0,0),(1,0)) == True)
+
+	def test_is_complete_residues_system(self):
+		self.assertTrue(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}).is_complete_residues_system() == True)
+		self.assertTrue(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,89}).is_complete_residues_system() == True)
+		self.assertFalse(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,28}).is_complete_residues_system() == True)
+		self.assertTrue(NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}).is_complete_residues_system() == True)
+
 test = False
 
 if test:
 	if __name__ == "__main__":
 		unittest.main()
 else:
-	mat = Matrix([[2,4,4],[-6,6,12],[10,-4,-16]])
-	digitSet = {0,1,2,3,4,5,6,7,8,9}
+	numsys = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+	print numsys.is_complete_residues_system()
