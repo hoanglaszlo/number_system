@@ -189,32 +189,86 @@ class Matrix:
 				self.matrix[i].append(0)
 				
 	def determinant(self):
-		n = self.rows()
-		if (n > 2):
-			sign, t, sum = 1, 0, 0
-			while t < n:
-				d = {}
-				t1 = 1
-				while t1 < n:
-					m = 0
-					d[t1] = []
-					while m < n:
-						if (m == t):
-							u = 0
-						else:
-							d[t1].append(self.matrix[t1][m])
-						m += 1
-					t1 += 1
-				l1 = Matrix([d[x] for x in d])
-				sum += sign * (self.matrix[0][t]) * (l1.determinant())
-				sign *= (-1)
-				t += 1
-			return sum
-		elif n == 2:
-			return (self.matrix[0][0] * self.matrix[1][1] - self.matrix[0][1] * self.matrix[1][0])
-		else:
+		assert self.is_square(), 'Can only compute the determinant of a square Matrix'
+		if self.rows() == 1:
 			return self.matrix[0][0]
-			
+		i = 0 # can be chosen arbitrarily (smaller than self.height)
+		sum = 0
+		for j in range(0, self.rows()):
+			if self.matrix[i][j] == 0:
+				continue
+			value = (-1)**(i+j) * self.matrix[i][j] * self._A_ij(i, j).determinant()
+			sum += value
+		return sum
+	
+	def cut(self, left = 0, right = None, top = 0, bottom = None):
+		if right is None:
+			right = self.cols()
+		if bottom is None:
+			bottom = self.rows()
+		assert left >= 0 and left < self.cols(), 'left out of bounds'
+		assert right > 0 and right <= self.cols(), 'right out of bounds'
+		assert top >= 0 and top < self.rows(), 'top out of bounds'
+		assert bottom > 0 and bottom <= self.rows(), 'bottom out of bounds'
+		assert left < right, 'left must be smaller than right'
+		assert top < bottom, 'top must be smaller than bottom'
+		width = right - left
+		height = bottom - top
+		flat_values = self.make_list()
+		values = []
+		for row in range(0, height):
+			newrow = []
+			for col in range(0, width):
+				value = flat_values[self.cols() * top + left + self.cols() * row + col]
+				newrow.append(value)
+			values.append(newrow)
+		return Matrix(values)	
+
+	def _A_ij(self, i, j):
+		assert i >= 0 and i < self.rows(), 'i out of bounds'
+		assert j >= 0 and j < self.cols(), 'j out of bounds'
+		if i == 0:
+			m1 = self.cut(top=1)
+		elif i == self.rows() - 1:
+			m1 = self.cut(bottom=self.rows() - 1)
+		else:
+			tm1 = self.cut(bottom=i)
+			tm2 = self.cut(top=i+1)
+			m1 = stackv(tm1, tm2)
+		if j == 0:
+			m2 = m1.cut(left=1)
+		elif j == m1.cols() - 1:
+			m2 = m1.cut(right=m1.cols() - 1)
+		else:
+			tm1 = m1.cut(right=j)
+			tm2 = m1.cut(left=j+1)
+			m2 = stackh(tm1, tm2)
+		return m2		
+
+	def adjugate(self):
+		"""Computes the adjugate of the Matrix"""
+		assert self.is_square(), 'Can only compute the adjugate of a square Matrix'
+		values = []
+		for i in range(0, self.rows()):
+			new_row = []
+			for j in range(0, self.rows()):
+				value = (-1)**(i+j) * self._A_ij(j, i).determinant()
+				new_row.append(value)
+			values.append(new_row)
+		return Matrix(values)		
+
+	def inverse(self):
+		assert self.is_square(), 'Can only compute the inverse of a square Matrix'
+		if self.rows() == 1:
+			return Matrix([[operator.truediv(1,self.matrix[0][0])]])
+		d = self.determinant()
+		if abs(d) < 10**-4:
+			raise Exception('Matrix is not invertible')
+		return 1 / d * self.adjugate()
+		
+	def make_list(self):
+		return [number for sublist in self.matrix for number in sublist]
+	
 	def smith_form(self):
 		m = copy.deepcopy(self)
 		U, G, V = Solver(m).smith_form()
@@ -271,6 +325,24 @@ class NumberSystem:
 		U, G, V = self.matrix.smith_form()
 		return self.hash_function(U*elementOne, G) == self.hash_function(U*elementTwo, G)
 
+	def find_congruent(self, element):
+		for i in self.digitSet:
+			if self.is_congruent(i, element):
+				return i
+		
+	def phi(self, element, n = 1, save = False):
+		digSet = []
+		for i in range(n):
+			M_inv = self.matrix.inverse()
+			d = self.find_congruent(element)
+			digSet.append(d)
+			k = M_inv*(element-d)
+			element = int(k[(0,0)])
+		if save:
+			return digSet
+		else:
+			return element
+		
 	def find_in_diagonal(self, G, number):
 		for index in xrange(G.rows()):
 			if G[(index, index)] != number:
@@ -279,13 +351,8 @@ class NumberSystem:
 
 	def is_complete_residues_system(self):
 		for i in self.digitSet:
-			#if any(self.is_congruent(i,j) for j in self.digitSet - {i}):
-			#	return False
-			for j in self.digitSet:
-				if i != j:
-					if self.is_congruent(i,j):
-						print self.is_congruent(i,j)
-						return False
+			if any(self.is_congruent(i,j) for j in self.digitSet - {i}):
+				return False
 		return True
 
 	def is_expansive(self):
@@ -427,6 +494,10 @@ class MatrixTests(unittest.TestCase):
 		self.assertTrue(m3.determinant() == -306)
 		self.assertTrue(id.determinant() == 1)
 
+	def test_inv(self):
+		self.assertEqual(Matrix([[1, 3, 3], [1, 4, 3], [1, 3, 4]]).inverse(), Matrix([[7, -3, -3], [-1, 1, 0], [-1, 0, 1]]))
+		self.assertEqual(Matrix([[1, 2, 3], [0, 1, 4], [5, 6, 0]]).inverse(), Matrix([[-24, 18, 5], [20, -15, -4], [-5, 4, 1]]))
+		
 class NumberSystemTests(unittest.TestCase):
 	def test_unit_condition(self):
 		mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
@@ -467,11 +538,59 @@ class NumberSystemTests(unittest.TestCase):
 		self.assertFalse(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,28}).is_complete_residues_system() == True)
 		self.assertTrue(NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}).is_complete_residues_system() == True)
 
+	def test_find_congruent(self):
+		numsys = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+		self.assertTrue(numsys.find_congruent((0,1)) == (1,0))
+		self.assertTrue(numsys.find_congruent((1,1)) == (0,0))
+		
+		numsys2 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
+		self.assertTrue(numsys2.find_congruent(13) == 3)
+		self.assertTrue(numsys2.find_congruent(15) == 5)
+		self.assertTrue(numsys2.find_congruent(64) == 4)
+		self.assertTrue(numsys2.find_congruent(8486) == 6)
+		
+def stackh(*matrices):
+	matrices = _normalize_args(matrices)
+	assert len(matrices) > 0, 'Can\'t stack zero matrices'
+	for matrix in matrices:
+		assert isinstance(matrix, Matrix), 'Can only stack matrices'
+	height = matrices[0].rows()
+	for matrix in matrices:
+		assert matrix.rows() == height, 'Can\'t horizontally stack matrices with different heights'
+	values = []
+	for row in range(0, height):
+		newrow = []
+		for matrix in matrices:
+			newrow += matrix.row(row)
+		values.append(newrow)
+	return Matrix(values)
+
+def stackv(*matrices):
+	matrices = _normalize_args(matrices)
+	assert len(matrices) > 0, 'Can\'t stack zero matrices'
+	for matrix in matrices:
+		assert isinstance(matrix, Matrix), 'Can only stack matrices'
+	width = matrices[0].cols()
+	for matrix in matrices:
+		assert matrix.cols() == width, 'Can\'t vertically stack matrices with different widths'
+	values = []
+	for matrix in matrices:
+		values += matrix.matrix
+	return Matrix(values)		
+
+def _normalize_args(matrices):
+	if len(matrices) > 0:
+		first_elem = matrices[0]
+		if isinstance(first_elem, list) or isinstance(first_elem, tuple):
+			assert len(matrices) == 1, 'Couldn\'t normalize arguments'
+			return first_elem
+		return matrices
+	return matrices
+
 test = False
 
 if test:
 	if __name__ == "__main__":
 		unittest.main()
 else:
-	numsys = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-	print numsys.is_complete_residues_system()
+	print NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}).phi(123456,2,True)
