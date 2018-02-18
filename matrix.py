@@ -6,6 +6,7 @@ import unittest
 from sympy import *
 from sympy import Matrix as Mat
 import copy
+import math
 
 class MatrixError(Exception):
 	pass
@@ -42,6 +43,13 @@ class InverseError(SquareError):
 	def __init__(self):
 		SquareError.__init__(self, "inverse")
 
+class FormError(MatrixError):
+	def __init__(self, msg):
+		self.msg = msg
+
+	def __str__(self):
+		return "%s" % self.msg
+		
 class Matrix:
 	def __init__(self, *args):
 		if len(args) == 2:
@@ -278,6 +286,54 @@ class Matrix:
 	def eigenvalues(self):
 		return Mat(self.matrix).eigenvals()
 		
+	def norm(self, type=2):
+		if type == 1:
+			return self._norm1()
+		elif type == 2:
+			return self._norm2()
+		elif type == 'inf':
+			return self._norm_inf()
+		elif type == 'fro':
+			return self._norm_fro()
+		else:
+			raise Exception('Illegal norm type')
+
+	def _norm1(self):
+		max = -1
+		for j in range(0, self.cols()):
+			value = sum(tuple(map(abs, self.col(j))))
+			if value > max:
+				max = value
+		return max
+
+	def _norm2(self):
+		if not (self.is_row_vector() or self.is_column_vector()):
+			# sqrt(dominant eigen value of A'A)
+			raise FormError("Form not accepted.")
+		elif self.is_row_vector():
+			return math.sqrt(sum(tuple(map(lambda x: abs(x**2), self.row(0)))))
+		elif self.is_column_vector():
+			return math.sqrt(sum(tuple(map(lambda x: abs(x**2), self.col(0)))))
+
+	def _norm_inf(self):
+		max = -1
+		for i in range(0, self.rows()):
+			value = sum(tuple(map(abs, self.row(i))))
+			if value > max:
+				max = value
+		return max
+
+	def _norm_fro(self):
+		sum = 0
+		for i in range(0, self.rows()):
+			for j in range(0, self.cols()):
+				value = self.matrix[i][j]
+				sum += abs(value**2)
+		return math.sqrt(sum)
+		
+	def transpose(self):
+		return Matrix([self.col(i) for i in range(0, self.cols())])
+		
 	@classmethod
 	def make_random(cls, m, n, low=0, high=10):
 		rows = []
@@ -455,6 +511,13 @@ class Solver:
 		return (s, self.matrix, t)
 		
 class MatrixTests(unittest.TestCase):
+	def setUp(self):
+		self.v1 = Matrix([[1, 2, 3]])
+		self.v2 = Matrix([[4, 5, 6]])
+		self.m1 = Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+		self.m2 = Matrix([[4, 1, -7, 2], [-1, 9, 6, 3]])
+		self.m3 = Matrix([[8, -3, 1], [4, -6, 2], [7, 3, 5], [-2, -5, 1]])
+		
 	def test_add_1(self):
 		m1 = Matrix([[1, 2, 3], [4, 5, 6]])
 		m2 = Matrix([[7, 8, 9], [10, 11, 12]])		
@@ -501,6 +564,18 @@ class MatrixTests(unittest.TestCase):
 	def test_inv(self):
 		self.assertEqual(Matrix([[1, 3, 3], [1, 4, 3], [1, 3, 4]]).inverse(), Matrix([[7, -3, -3], [-1, 1, 0], [-1, 0, 1]]))
 		self.assertEqual(Matrix([[1, 2, 3], [0, 1, 4], [5, 6, 0]]).inverse(), Matrix([[-24, 18, 5], [20, -15, -4], [-5, 4, 1]]))
+		
+	def test_norm(self):
+		self.assertAlmostEqual(self.m3.norm(type=1), 21)
+		self.assertAlmostEqual(self.v1.norm(type=2), 3.741657387)
+		self.assertAlmostEqual(self.v2.norm(type=2), 8.774964387)
+		#self.assertAlmostEqual(self.m3.norm(type=2), 12.51910405)
+		self.assertAlmostEqual(self.m3.norm(type='inf'), 15)
+		self.assertAlmostEqual(self.m3.norm(type='fro'), 15.58845727)
+		self.assertEqual(self.v1.norm(), self.v1.transpose().norm())
+		self.assertEqual(self.v2.norm(), self.v2.transpose().norm())
+		self.assertRaises(Exception, self.v1.norm, type='non-existant')
+		
 		
 class NumberSystemTests(unittest.TestCase):
 	def test_unit_condition(self):
@@ -602,4 +677,6 @@ if test:
 	if __name__ == "__main__":
 		unittest.main()
 else:
-	print NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1)}).is_congruent((0,0),(0,1))
+	v1 = Matrix([[1, 2, 3]])
+	v2 = Matrix([[4, 5, 6]])
+	print v2.is_vector()
