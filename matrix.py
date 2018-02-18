@@ -4,6 +4,7 @@ import random
 import operator
 import unittest
 from sympy import *
+from sympy import Matrix as Mat
 import copy
 
 class MatrixError(Exception):
@@ -274,6 +275,9 @@ class Matrix:
 		U, G, V = Solver(m).smith_form()
 		return U, G, V
 
+	def eigenvalues(self):
+		return Mat(self.matrix).eigenvals()
+		
 	@classmethod
 	def make_random(cls, m, n, low=0, high=10):
 		rows = []
@@ -508,6 +512,7 @@ class NumberSystemTests(unittest.TestCase):
 		
 		self.assertTrue(NumberSystem(mat1, digitSet1).unit_condition() == True)
 		self.assertTrue(NumberSystem(mat2, digitSet2).unit_condition() == True)
+		self.assertTrue(NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1)}).unit_condition() == True)
 		
 	def test_find_in_diagonal(self):
 		mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
@@ -537,7 +542,7 @@ class NumberSystemTests(unittest.TestCase):
 		self.assertTrue(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,89}).is_complete_residues_system() == True)
 		self.assertFalse(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,28}).is_complete_residues_system() == True)
 		self.assertTrue(NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}).is_complete_residues_system() == True)
-
+	
 	def test_find_congruent(self):
 		numsys = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
 		self.assertTrue(numsys.find_congruent((0,1)) == (1,0))
@@ -548,6 +553,10 @@ class NumberSystemTests(unittest.TestCase):
 		self.assertTrue(numsys2.find_congruent(15) == 5)
 		self.assertTrue(numsys2.find_congruent(64) == 4)
 		self.assertTrue(numsys2.find_congruent(8486) == 6)
+	
+	def test_check(self):
+		self.assertTrue(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}).check() == True)
+		self.assertTrue(NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}).check() == True)
 		
 def stackh(*matrices):
 	matrices = _normalize_args(matrices)
@@ -587,10 +596,10 @@ def _normalize_args(matrices):
 		return matrices
 	return matrices
 
-test = False
+test = True
 
 if test:
 	if __name__ == "__main__":
 		unittest.main()
 else:
-	print NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}).phi(123456,2,True)
+	print NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1)}).is_congruent((0,0),(0,1))
