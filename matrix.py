@@ -273,7 +273,7 @@ class Matrix:
 		d = self.determinant()
 		if abs(d) < 10**-4:
 			raise Exception('Matrix is not invertible')
-		return 1 / d * self.adjugate()
+		return operator.truediv(1,d) * self.adjugate()
 		
 	def make_list(self):
 		return [number for sublist in self.matrix for number in sublist]
@@ -333,6 +333,12 @@ class Matrix:
 		
 	def transpose(self):
 		return Matrix([self.col(i) for i in range(0, self.cols())])
+		
+	def power(self, c):
+		m = copy.deepcopy(self)
+		for i in range(1,c):
+			m = m * self
+		return m
 		
 	@classmethod
 	def make_random(cls, m, n, low=0, high=10):
@@ -431,7 +437,19 @@ class NumberSystem:
 			else:
 				print "It is okay, but... unit_condition failed"
 		return False
-
+		
+	def find_c(self):
+		c = 1
+		while not self.matrix.power(c).inverse().norm("inf") < 1:
+			c += 1
+		return c
+		
+	def find_gamma(self):
+		c = self.find_c()
+		norm = self.matrix.power(c).inverse().norm("inf")
+		gamma = operator.truediv(1,1-norm)
+		return gamma
+	
 class Solver:
 	def __init__(self, matrix):
 		self.matrix =  matrix
@@ -575,8 +593,7 @@ class MatrixTests(unittest.TestCase):
 		self.assertEqual(self.v1.norm(), self.v1.transpose().norm())
 		self.assertEqual(self.v2.norm(), self.v2.transpose().norm())
 		self.assertRaises(Exception, self.v1.norm, type='non-existant')
-		
-		
+			
 class NumberSystemTests(unittest.TestCase):
 	def test_unit_condition(self):
 		mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
@@ -671,12 +688,12 @@ def _normalize_args(matrices):
 		return matrices
 	return matrices
 
-test = True
+test = False
 
 if test:
 	if __name__ == "__main__":
 		unittest.main()
 else:
-	v1 = Matrix([[1, 2, 3]])
-	v2 = Matrix([[4, 5, 6]])
-	print v2.is_vector()
+	numsys = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+	print numsys.find_gamma()
+	
