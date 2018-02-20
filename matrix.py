@@ -368,6 +368,15 @@ class Matrix:
 		return m
 		
 	@classmethod
+	def from_tuple(cls, tup):
+		if not isinstance(tup, tuple):
+			raise TypeError("Cannot convert into matrix from type %s" % type(tup))
+		rows = []
+		for element in tup:
+			rows.append([element])
+		return Matrix(rows)
+		
+	@classmethod
 	def make_random(cls, m, n, low=0, high=10):
 		rows = []
 		for x in xrange(m):
@@ -422,6 +431,8 @@ class NumberSystem:
 
 	def is_congruent(self, elementOne, elementTwo):
 		U, G, V = self.matrix.smith_form()
+		if not (abs(U.determinant()) == 1 and abs(V.determinant()) == 1):
+			raise FormError("Smith normal form error")
 		return self.hash_function(U * elementOne, G) == self.hash_function(U * elementTwo, G)
 
 	def find_congruent(self, element):
@@ -454,12 +465,19 @@ class NumberSystem:
 		
 	def phi(self, element, n = 1, save = False):
 		digSet = []
+		M_inv = self.matrix.inverse()
 		for i in range(n):
-			M_inv = self.matrix.inverse()
 			d = self.find_congruent(element)
 			digSet.append(d)
-			k = M_inv * (element - d)
-			element = int(k[(0,0)])
+			if self.matrix.is_scalar_element(element):
+				k = M_inv * (element - d)
+				element = int(k[(0,0)])
+			elif isinstance(element, Matrix):
+				k = M_inv * (element - Matrix.from_tuple(d))
+				element = k
+			elif isinstance(element, tuple):
+				k = M_inv * tuple(map(lambda x, y: x - y, element, d))
+				element = k
 		if save:
 			return digSet
 		else:
@@ -653,60 +671,71 @@ class MatrixTests(unittest.TestCase):
 		self.assertAlmostEqual(self.m5.norm("fro"), 14.1421, 3)
 			
 class NumberSystemTests(unittest.TestCase):
-	def test_unit_condition(self):
-		mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
-		digitSet1 = {0,1,2,3,4,5,6,7,8,9}
+	def setUp(self):
+		self.mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
+		self.mat2 = Matrix([[1,1,1],[4,-2,5],[2,8,7]])
+		self.mat3 = Matrix([[1,1,1],[4,1,5],[2,8,7]])
+		self.mat4 = Matrix([[1,1,1],[4,1,5],[2,8,1]])
+		
+		self.numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
+		self.numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+		self.numsys3 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,18})
+		self.numsys4 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,39})
+		self.numsys5 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(1,1),(1,0)})
+		
+	def testFindInDiagonal(self):
+		self.assertEqual(self.numsys1.find_in_diagonal(self.mat1, 1), 0)
+		self.assertEqual(self.numsys1.find_in_diagonal(self.mat2, 1), 1)
+		self.assertEqual(self.numsys1.find_in_diagonal(self.mat3, 1), 2)
+		self.assertEqual(self.numsys1.find_in_diagonal(self.mat4, 1), 3)
 
-		mat2 = Matrix([[-1,-1],[1,-1]])
-		digitSet2 = {(0,0),(1,0)}
+	def testIsCongruent(self):		
+		self.assertTrue(self.numsys1.is_congruent(10,0))
+		self.assertTrue(self.numsys1.is_congruent(14,4))
+		self.assertTrue(self.numsys1.is_congruent(6,36))
+		self.assertFalse(self.numsys1.is_congruent(13,12))
+		self.assertFalse(self.numsys1.is_congruent(66,43))
 		
-		self.assertTrue(NumberSystem(mat1, digitSet1).unit_condition() == True)
-		self.assertTrue(NumberSystem(mat2, digitSet2).unit_condition() == True)
-		self.assertTrue(NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1)}).unit_condition() == True)
-		
-	def test_find_in_diagonal(self):
-		mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
-		mat2 = Matrix([[1,1,1],[4,-2,5],[2,8,7]])
-		mat3 = Matrix([[1,1,1],[4,1,5],[2,8,7]])
-		mat4 = Matrix([[1,1,1],[4,1,5],[2,8,1]])
-		digitSet = {0,1,2,3,4,5,6,7,8,9}
-		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat1, 1) == 0)
-		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat2, 1) == 1)
-		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat3, 1) == 2)
-		self.assertTrue(NumberSystem(mat1, digitSet).find_in_diagonal(mat4, 1) == 3)
+		self.assertFalse(self.numsys2.is_congruent((0,0),(1,0)))
 
-	def test_is_congruent(self):
-		numsys = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
+	def testFindCongruent(self):
+		self.assertEqual(self.numsys1.find_congruent(13), 3)
+		self.assertEqual(self.numsys1.find_congruent(15), 5)
+		self.assertEqual(self.numsys1.find_congruent(64), 4)
+		self.assertEqual(self.numsys1.find_congruent(8486), 6)
 		
-		self.assertTrue(numsys.is_congruent(10,0) == True)
-		self.assertTrue(numsys.is_congruent(14,4) == True)
-		self.assertTrue(numsys.is_congruent(6,36) == True)
-		self.assertFalse(numsys.is_congruent(13,12) == True)
-		self.assertFalse(numsys.is_congruent(66,43) == True)
-		
-		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		self.assertFalse(numsys2.is_congruent((0,0),(1,0)) == True)
-
-	def test_is_complete_residues_system(self):
-		self.assertTrue(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}).is_complete_residues_system() == True)
-		self.assertTrue(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,89}).is_complete_residues_system() == True)
-		self.assertFalse(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,28}).is_complete_residues_system() == True)
-		self.assertTrue(NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}).is_complete_residues_system() == True)
+		self.assertEqual(self.numsys2.find_congruent((0,1)), (1,0))
+		self.assertEqual(self.numsys2.find_congruent((1,1)), (0,0))
 	
-	def test_find_congruent(self):
-		numsys = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		self.assertTrue(numsys.find_congruent((0,1)) == (1,0))
-		self.assertTrue(numsys.find_congruent((1,1)) == (0,0))
-		
-		numsys2 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
-		self.assertTrue(numsys2.find_congruent(13) == 3)
-		self.assertTrue(numsys2.find_congruent(15) == 5)
-		self.assertTrue(numsys2.find_congruent(64) == 4)
-		self.assertTrue(numsys2.find_congruent(8486) == 6)
+	def testIsCompleteResiduesSystem(self):
+		self.assertTrue(self.numsys1.is_complete_residues_system())
+		self.assertTrue(self.numsys2.is_complete_residues_system())
+		self.assertFalse(self.numsys3.is_complete_residues_system())
+		self.assertTrue(self.numsys4.is_complete_residues_system())
+		self.assertTrue(self.numsys5.is_complete_residues_system())
 	
-	def test_check(self):
-		self.assertTrue(NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}).check() == True)
-		self.assertTrue(NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}).check() == True)
+	def testUnitCondition(self):
+		self.assertTrue(self.numsys1.unit_condition())
+		self.assertTrue(self.numsys2.unit_condition())
+		
+	def testIsExpansive(self):
+		self.assertTrue(self.numsys1.is_expansive())
+		self.assertTrue(self.numsys2.is_expansive())
+	
+	def testPhi(self):
+		self.assertEqual(self.numsys1.phi(123456789, 0), 123456789)
+		self.assertEqual(self.numsys1.phi(123456789, 1), 12345678)
+		self.assertEqual(self.numsys1.phi(123456789, 2), 1234567)
+		self.assertEqual(self.numsys1.phi(123456789, 5), 1234)
+		self.assertEqual(self.numsys1.phi(123456789, 8), 1)
+		self.assertEqual(self.numsys1.phi(123456789, 9), 0)
+	
+	def testCheck(self):
+		self.assertTrue(self.numsys1.check())
+		self.assertTrue(self.numsys2.check())
+		self.assertFalse(self.numsys3.check())
+		self.assertTrue(self.numsys4.check())
+		self.assertTrue(self.numsys5.check())
 		
 		
 def stackh(*matrices):
@@ -747,10 +776,13 @@ def _normalize_args(matrices):
 		return matrices
 	return matrices
 
-test = True
+test = False
 
 if __name__ == "__main__":
 	if test:
 		unittest.main()
 	else:
 		print "Hooray"
+		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
+		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+		print numsys2.phi((4,5), )
