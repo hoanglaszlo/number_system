@@ -49,8 +49,7 @@ class FormError(MatrixError):
 
 	def __str__(self):
 		return "%s" % self.msg
-		
-		
+			
 class Matrix:
 	def __init__(self, *args):
 		if len(args) == 2:
@@ -70,9 +69,17 @@ class Matrix:
 				
 	def __str__(self):
 		s = ""
-		for row in self.matrix:
-			s += "%s\n" % row
-		return s
+		if self.cols() > 1:
+			for row in self.matrix:
+				s += "%s\n" % row
+			return s
+		elif self.cols() == 1:
+			s += "("
+			for row in self.matrix:
+				s += "%s, " % row[0]
+			s = s[:-2] + ")"
+			return s
+			
 
 	def __getitem__(self, (row, col)):
 		return self.matrix[row][col]
@@ -367,6 +374,20 @@ class Matrix:
 			m = m * self
 		return m
 		
+	def to_tuple(self):
+		if not self.cols() == 1:
+			raise Form("Only n:1 matrix can be converted.")
+		list = []
+		for row in self.matrix:
+			list.append(row[0])
+		return tuple(list)
+		
+	def to_int(self):
+		rows = []
+		for row in self.matrix:
+			rows.append([int(element) for element in row])
+		return Matrix(rows)
+		
 	@classmethod
 	def from_tuple(cls, tup):
 		if not isinstance(tup, tuple):
@@ -462,22 +483,19 @@ class NumberSystem:
 			else:
 				print "It is okay, but... unit_condition failed"
 		return False
-		
+			
 	def phi(self, element, n = 1, save = False):
 		digSet = []
 		M_inv = self.matrix.inverse()
 		for i in range(n):
 			d = self.find_congruent(element)
-			digSet.append(d)
+			digSet.append(element)
 			if self.matrix.is_scalar_element(element):
 				k = M_inv * (element - d)
 				element = int(k[(0,0)])
-			elif isinstance(element, Matrix):
-				k = M_inv * (element - Matrix.from_tuple(d))
-				element = k
 			elif isinstance(element, tuple):
 				k = M_inv * tuple(map(lambda x, y: x - y, element, d))
-				element = k
+				element = k.to_int().to_tuple()
 		if save:
 			return digSet
 		else:
@@ -572,8 +590,7 @@ class Solver:
 				self.rightmult2(self.matrix, i0, i1, coef1, 1-coef1*coef4, 1, -coef4)
 				self.leftmult2(t, i0, i1, coef4, 1-coef1*coef4, 1, -coef1)
 		return (s, self.matrix, t)
-		
-		
+				
 class MatrixTests(unittest.TestCase):
 	def setUp(self):
 		self.v1 = Matrix([[1, 2, 3]])
@@ -782,7 +799,9 @@ if __name__ == "__main__":
 	if test:
 		unittest.main()
 	else:
-		print "Hooray"
+		#print "Hooray"
 		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
 		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		print numsys2.phi((4,5), )
+		print numsys1.phi(123456789, 11, True)
+		print numsys2.phi((50,49), 17, True)
+		
