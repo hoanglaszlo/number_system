@@ -513,6 +513,37 @@ class NumberSystem:
 		gamma = operator.truediv(1,1-norm)
 		return gamma
 	
+	def calculate_xi_product(self, digit):
+		c = self.find_c()
+		matrix = Matrix(self.matrix.rows(),1)
+		for j in xrange(1,c+1):
+			matrix = stackh(matrix, self.matrix.power(j).inverse() * digit)
+		matrix = matrix.cut(left=1)
+		return matrix
+		
+	def calculate_from_matrices(self, func):
+		c = self.find_c()
+		xi = Matrix(self.matrix.rows(), c)	
+		matrices = []
+		for digit in self.digitSet:
+			matrices.append(self.calculate_xi_product(digit))
+		
+		for i in xrange(xi.rows()):
+			for j in xrange(xi.cols()):
+				xi[(i,j)] = func((matrix[(i,j)] for matrix in matrices), key=abs)
+		return xi
+		
+	def calculate_box(self):
+		c = self.find_c()
+		gamma = self.find_gamma()
+		eta = self.calculate_from_matrices(min).transpose()
+		xi = self.calculate_from_matrices(max).transpose()
+		sum_min = sum((Matrix.from_tuple(tuple(col)) for col in eta.matrix), Matrix(self.matrix.rows(), 1))
+		sum_max = sum((Matrix.from_tuple(tuple(col)) for col in xi.matrix) , Matrix(self.matrix.rows(), 1))
+		l = - (gamma * sum_min).to_int()
+		u = - (gamma * sum_max).to_int()
+		return l, u
+		
 class Solver:
 	def __init__(self, matrix):
 		self.matrix =  matrix
@@ -802,6 +833,10 @@ if __name__ == "__main__":
 		#print "Hooray"
 		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
 		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		print numsys1.phi(123456789, 11, True)
+		
+		#print numsys1.phi(123456789, 11, True)
 		print numsys2.phi((50,49), 17, True)
 		
+		#l, u = numsys2.calculate_box()
+		l, u = numsys1.calculate_box()
+		#print "l: ", l, "u: ", u
