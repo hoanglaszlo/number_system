@@ -7,6 +7,7 @@ from sympy import *
 from sympy import Matrix as Mat
 import copy
 import math
+import cmath
 
 class MatrixError(Exception):
 	pass
@@ -79,14 +80,13 @@ class Matrix:
 				s += "%s, " % row[0]
 			s = s[:-2] + ")"
 			return s
-			
 
 	def __getitem__(self, (row, col)):
 		return self.matrix[row][col]
 
 	def __setitem__(self, (row, col), value):
 		self.matrix[row][col] = value
-		
+	
 	def __add__(self, other):
 		if not isinstance(other, Matrix):
 			raise TypeError("Cannot add a matrix and a %s" % type(other))
@@ -384,7 +384,7 @@ class Matrix:
 			list.append(row[0])
 		return tuple(list)
 		
-	def to_int(self, func):
+	def to_int(self, func=int):
 		rows = []
 		for row in self.matrix:
 			rows.append([int(func(element)) for element in row])
@@ -454,6 +454,7 @@ class NumberSystem:
 
 	def is_congruent(self, elementOne, elementTwo):
 		U, G, V = self.matrix.smith_form()
+		print elementOne, U * elementOne, self.hash_function(U * elementOne, G)
 		if not (abs(U.determinant()) == 1 and abs(V.determinant()) == 1):
 			raise FormError("Smith normal form error")
 		return self.hash_function(U * elementOne, G) == self.hash_function(U * elementTwo, G)
@@ -553,6 +554,16 @@ class NumberSystem:
 			u = - ((gamma * sum_max).to_int(math.floor))
 		return l, u
 		
+	def calculate_box_phi(self):
+		l, u = self.calculate_box()
+		if l.rows() == 1:
+			for i in range(l[(0,0)], u[(0,0)]+1):
+				print i
+		if l.rows() == 2:
+			for i in range(l[(0,0)], u[(0,0)]+1):
+				for j in range(l[(1,0)], u[(1,0)]+1):
+					print (i,j),  "->",  self.phi((i,j))
+		
 class Solver:
 	def __init__(self, matrix):
 		self.matrix =  matrix
@@ -581,7 +592,7 @@ class Solver:
 				break
 			if self.matrix[(i,j)] == 0:
 				for ii in range(self.matrix.rows()):
-					if self.matrix[ii][j] != 0:
+					if self.matrix[(ii,j)] != 0:
 						break
 				self.leftmult2(self.matrix, i, ii, 0, 1, 1, 0)
 				self.rightmult2(s, i, ii, 0, 1, 1, 0)
@@ -595,36 +606,36 @@ class Solver:
 					if self.matrix[(ii,j)] == 0:
 						continue
 					upd = True
-					if domain.rem(self.matrix[ii, j], self.matrix[i, j]) != 0:
+					if domain.rem(self.matrix[(ii, j)], self.matrix[(i, j)]) != 0:
 						coef1, coef2, g = domain.gcdex(self.matrix[i,j], self.matrix[ii, j])
-						coef3 = domain.quo(self.matrix[ii, j], g)
-						coef4 = domain.quo(self.matrix[i, j], g)
+						coef3 = domain.quo(self.matrix[(ii, j)], g)
+						coef4 = domain.quo(self.matrix[(i, j)], g)
 						self.leftmult2(self.matrix,i, ii, coef1, coef2, -coef3, coef4)
 						self.rightmult2(s, i, ii, coef4, -coef2, coef3, coef1)
-					coef5 = domain.quo(self.matrix[ii, j], self.matrix[i, j])
+					coef5 = domain.quo(self.matrix[(ii, j)], self.matrix[(i, j)])
 					self.leftmult2(self.matrix, i, ii, 1, 0, -coef5, 1)
 					self.rightmult2(s, i, ii, 1, 0, coef5, 1)
 				for jj in range(j+1, self.matrix.cols()):
-					if self.matrix[i, jj] == 0:
+					if self.matrix[(i, jj)] == 0:
 						continue
 					upd = True
-					if domain.rem(self.matrix[i, jj], self.matrix[i, j]) != 0:
-						coef1, coef2, g = domain.gcdex(self.matrix[i,j], self.matrix[i, jj])
-						coef3 = domain.quo(self.matrix[i, jj], g)
-						coef4 = domain.quo(self.matrix[i, j], g)
+					if domain.rem(self.matrix[(i, jj)], self.matrix[(i, j)]) != 0:
+						coef1, coef2, g = domain.gcdex(self.matrix[(i,j)], self.matrix[(i, jj)])
+						coef3 = domain.quo(self.matrix[(i, jj)], g)
+						coef4 = domain.quo(self.matrix[(i, j)], g)
 						self.rightmult2(self.matrix, j, jj, coef1, -coef3, coef2, coef4)
 						self.leftmult2(t, j, jj, coef4, coef3, -coef2, coef1)
-					coef5 = domain.quo(self.matrix[i, jj], self.matrix[i, j])
+					coef5 = domain.quo(self.matrix[(i, jj)], self.matrix[(i, j)])
 					self.rightmult2(self.matrix, j, jj, 1, -coef5, 0, 1)
 					self.leftmult2(t, j, jj, 1, coef5, 0, 1)
 			last_j = j
 		for i1 in range(min(self.matrix.rows(), self.matrix.cols())):
 			for i0 in reversed(range(i1)):
-				coef1, coef2, g = domain.gcdex(self.matrix[i0, i0], self.matrix[i1,i1])
+				coef1, coef2, g = domain.gcdex(self.matrix[(i0, i0)], self.matrix[(i1,i1)])
 				if g == 0:
 					continue
-				coef3 = domain.quo(self.matrix[i1, i1], g)
-				coef4 = domain.quo(self.matrix[i0, i0], g)
+				coef3 = domain.quo(self.matrix[(i1, i1)], g)
+				coef4 = domain.quo(self.matrix[(i0, i0)], g)
 				self.leftmult2(self.matrix, i0, i1, 1, coef2, coef3, coef2*coef3-1)
 				self.rightmult2(s, i0, i1, 1-coef2*coef3, coef2, coef3, -1)
 				self.rightmult2(self.matrix, i0, i1, coef1, 1-coef1*coef4, 1, -coef4)
@@ -742,8 +753,7 @@ class NumberSystemTests(unittest.TestCase):
 		self.numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
 		self.numsys7 = NumberSystem(Matrix([[3]]), {-2,0,2})
 		self.numsys8 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
-		
-		
+			
 	def testFindInDiagonal(self):
 		self.assertEqual(self.numsys1.find_in_diagonal(self.mat1, 1), 0)
 		self.assertEqual(self.numsys1.find_in_diagonal(self.mat2, 1), 1)
@@ -800,6 +810,7 @@ class NumberSystemTests(unittest.TestCase):
 		
 	def testCalculatingBox(self):
 		self.assertEqual(self.numsys2.calculate_box(), (Matrix([[0],[0]]),Matrix([[0],[0]])))
+		self.assertEqual(self.numsys1.calculate_box(), (Matrix([[0]]),Matrix([[0]])))
 		self.assertEqual(self.numsys7.calculate_box(), (Matrix([[-1]]),Matrix([[1]])))
 		self.assertEqual(self.numsys6.calculate_box(), (Matrix([[-2],[-1]]),Matrix([[0],[0]])))
 		self.assertEqual(self.numsys8.calculate_box(), (Matrix([[0],[-2]]),Matrix([[2],[0]])))
@@ -848,9 +859,11 @@ if __name__ == "__main__":
 	if test:
 		unittest.main()
 	else:
-		print "Hooray"
-		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
-		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		numsys5 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
-		numsys4 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		numsys3 = NumberSystem(Matrix([[3]]), {-2,0,2})
+		#print "Hooray"
+		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}) 				#0-0
+		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}) 			#(0,0)-(0,0)
+		numsys3 = NumberSystem(Matrix([[3]]), {-2,0,2})								#-1
+		numsys4 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
+		numsys5 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-6,-5)})
+		numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
+		print numsys6.find_congruent((-1,-1))
