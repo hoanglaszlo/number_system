@@ -505,7 +505,7 @@ class NumberSystem:
 		
 	def find_c(self):
 		c = 1
-		while not self.matrix.power(c).inverse().norm("inf") < 0.01:
+		while not self.matrix.power(c).inverse().norm("inf") < 0.001:
 			c += 1
 		return c
 		
@@ -529,22 +529,28 @@ class NumberSystem:
 		matrices = []
 		for digit in self.digitSet:
 			matrices.append(self.calculate_xi_product(digit))
-			
+	
 		for i in xrange(xi.rows()):
 			for j in xrange(xi.cols()):
-				xi[(i,j)] = func(abs(matrix[(i,j)]) for matrix in matrices)
+				xi[(i,j)] = func(matrix[(i,j)] for matrix in matrices)
 		return xi
 		
-	def calculate_box(self):
+	def calculate_box(self, type = "round"):
 		c = self.find_c()
 		gamma = self.find_gamma()
 		eta = self.calculate_from_matrices(min).transpose()
 		xi = self.calculate_from_matrices(max).transpose()
 		sum_min = sum((Matrix.from_tuple(tuple(col)) for col in eta.matrix), Matrix(self.matrix.rows(), 1))
 		sum_max = sum((Matrix.from_tuple(tuple(col)) for col in xi.matrix) , Matrix(self.matrix.rows(), 1))
-		print sum_min, sum_max
-		l = - (gamma * sum_min).to_int(math.ceil)
-		u = - (gamma * sum_max).to_int(math.floor)
+		if type == "original" or type == 1:
+			l = gamma * sum_min
+			u = gamma * sum_max
+		if type == "round" or type == 2:
+			l = ((gamma * sum_min).to_int(math.ceil))
+			u = ((gamma * sum_max).to_int(math.floor))
+		if type == "periodic" or type == 3:
+			l = - ((gamma * sum_min).to_int(math.ceil))
+			u = - ((gamma * sum_max).to_int(math.floor))
 		return l, u
 		
 class Solver:
@@ -733,6 +739,10 @@ class NumberSystemTests(unittest.TestCase):
 		self.numsys3 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,18})
 		self.numsys4 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,39})
 		self.numsys5 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(1,1),(1,0)})
+		self.numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
+		self.numsys7 = NumberSystem(Matrix([[3]]), {-2,0,2})
+		self.numsys8 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
+		
 		
 	def testFindInDiagonal(self):
 		self.assertEqual(self.numsys1.find_in_diagonal(self.mat1, 1), 0)
@@ -788,6 +798,11 @@ class NumberSystemTests(unittest.TestCase):
 		self.assertTrue(self.numsys4.check())
 		self.assertTrue(self.numsys5.check())
 		
+	def testCalculatingBox(self):
+		self.assertEqual(self.numsys2.calculate_box(), (Matrix([[0],[0]]),Matrix([[0],[0]])))
+		self.assertEqual(self.numsys7.calculate_box(), (Matrix([[-1]]),Matrix([[1]])))
+		self.assertEqual(self.numsys6.calculate_box(), (Matrix([[-2],[-1]]),Matrix([[0],[0]])))
+		self.assertEqual(self.numsys8.calculate_box(), (Matrix([[0],[-2]]),Matrix([[2],[0]])))
 		
 def stackh(*matrices):
 	matrices = _normalize_args(matrices)
@@ -833,9 +848,9 @@ if __name__ == "__main__":
 	if test:
 		unittest.main()
 	else:
-		#print "Hooray"
+		print "Hooray"
 		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
 		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+		numsys5 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
+		numsys4 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
 		numsys3 = NumberSystem(Matrix([[3]]), {-2,0,2})
-		l, u = numsys2.calculate_box()
-		print "l: ", l, "u: ", u
