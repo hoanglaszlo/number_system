@@ -372,6 +372,8 @@ class Matrix:
 		m = copy.deepcopy(self)
 		for i in xrange(1,c):
 			m = m * self
+		if isinstance(m, int):
+			m = Matrix([[m]])
 		return m
 		
 	def to_tuple(self):
@@ -382,10 +384,10 @@ class Matrix:
 			list.append(row[0])
 		return tuple(list)
 		
-	def to_int(self):
+	def to_int(self, func):
 		rows = []
 		for row in self.matrix:
-			rows.append([int(element) for element in row])
+			rows.append([int(func(element)) for element in row])
 		return Matrix(rows)
 		
 	@classmethod
@@ -503,7 +505,7 @@ class NumberSystem:
 		
 	def find_c(self):
 		c = 1
-		while not self.matrix.power(c).inverse().norm("inf") < 1:
+		while not self.matrix.power(c).inverse().norm("inf") < 0.01:
 			c += 1
 		return c
 		
@@ -527,10 +529,10 @@ class NumberSystem:
 		matrices = []
 		for digit in self.digitSet:
 			matrices.append(self.calculate_xi_product(digit))
-		
+			
 		for i in xrange(xi.rows()):
 			for j in xrange(xi.cols()):
-				xi[(i,j)] = func((matrix[(i,j)] for matrix in matrices), key=abs)
+				xi[(i,j)] = func(abs(matrix[(i,j)]) for matrix in matrices)
 		return xi
 		
 	def calculate_box(self):
@@ -540,8 +542,9 @@ class NumberSystem:
 		xi = self.calculate_from_matrices(max).transpose()
 		sum_min = sum((Matrix.from_tuple(tuple(col)) for col in eta.matrix), Matrix(self.matrix.rows(), 1))
 		sum_max = sum((Matrix.from_tuple(tuple(col)) for col in xi.matrix) , Matrix(self.matrix.rows(), 1))
-		l = - (gamma * sum_min).to_int()
-		u = - (gamma * sum_max).to_int()
+		print sum_min, sum_max
+		l = - (gamma * sum_min).to_int(math.ceil)
+		u = - (gamma * sum_max).to_int(math.floor)
 		return l, u
 		
 class Solver:
@@ -833,10 +836,6 @@ if __name__ == "__main__":
 		#print "Hooray"
 		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
 		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		
-		#print numsys1.phi(123456789, 11, True)
-		print numsys2.phi((50,49), 17, True)
-		
-		#l, u = numsys2.calculate_box()
-		l, u = numsys1.calculate_box()
-		#print "l: ", l, "u: ", u
+		numsys3 = NumberSystem(Matrix([[3]]), {-2,0,2})
+		l, u = numsys2.calculate_box()
+		print "l: ", l, "u: ", u
