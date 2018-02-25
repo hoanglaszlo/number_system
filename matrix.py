@@ -454,7 +454,6 @@ class NumberSystem:
 
 	def is_congruent(self, elementOne, elementTwo):
 		U, G, V = self.matrix.smith_form()
-		print elementOne, U * elementOne, self.hash_function(U * elementOne, G)
 		if not (abs(U.determinant()) == 1 and abs(V.determinant()) == 1):
 			raise FormError("Smith normal form error")
 		return self.hash_function(U * elementOne, G) == self.hash_function(U * elementTwo, G)
@@ -565,6 +564,189 @@ class NumberSystem:
 					print (i,j),  "->",  self.phi((i,j))
 		
 class Solver:
+	def __init__(self, matrix):
+		self.matrix = matrix
+		self.S = None;
+		self.J = None;
+		self.T = None;
+
+	def cSwap(self,i,j):
+		for k in range(self.J.rows()):
+			temp = self.J[(k, i)]
+			self.J[(k,i)] = self.J[(k,j)]
+			self.J[(k,j)] = temp
+		adjustment = Matrix.identity(self.T.rows())
+		adjustment.set(i,i,0)
+		adjustment.set(j,j,0)
+		adjustment.set(i,j,1)
+		adjustment.set(j,i,1)
+		self.T = self.T*adjustment
+
+	def cLC(self,I,i,j,a,b,gcd=None):
+		if gcd is None or a==1 or a==-1:
+			c = 0
+			d = 1
+		else:
+			c = -self.J[(I,j)]/gcd
+			d = self.J[(I,i)]/gcd
+		temp = []
+		for k in range(self.J.rows()):
+			temp = self.J[(k,i)]
+			self.J[(k,i)] = a*self.J[(k,i)] + b*self.J[(k,j)]
+			self.J[(k,j)] = c*temp + d*self.J[(k,j)]
+		adjustment = Matrix.identity(self.T.rows())
+		adjustment[(i,i)] = a
+		if i!=j:
+			adjustment[(j,i)] = b 
+			adjustment[(i,j)] = c
+			adjustment[(j,j)] = d
+		assert adjustment.determinant()== 1 or adjustment.determinant()== -1
+		self.T = self.T*adjustment
+
+	def rSwap(self,i,j):
+		for k in range(self.J.cols()):
+			temp = self.J[(i, k)]
+			self.J[(i,k)] = self.J[(j,k)]
+			self.J[(j,k)] = temp
+		adjustment = Matrix.identity(self.S.rows())
+		adjustment[(i,j)] = 1
+		adjustment[(j,i)] = 1
+		adjustment[(i,i)] = 0
+		adjustment[(j,j)] = 0
+		self.S = adjustment*self.S
+
+	def rLC(self,I,i,j,a,b,gcd=None):
+		if (gcd is None or a==1 or a==-1):
+			c=0
+			d=1
+		else:
+			c = -self.J[(j,I)]/gcd
+			d = self.J[(i,I)]/gcd
+		for k in range(self.J.cols()):
+			temp = self.J[(i,k)]
+			self.J[(i,k)] = a*self.J[(i,k)] + b*self.J[(j,k)]
+			self.J[(j,k)] = c*temp + d*self.J[(j,k)]
+		adjustment = Matrix.identity(self.S.rows())
+		adjustment[(i,i)] = a
+		if i!=j:
+			adjustment[(i,j)] = b 
+			adjustment[(j,i)] = c
+			adjustment[(j,j)] = d
+		assert adjustment.determinant() == 1 or adjustment.determinant() == -1
+		self.S = adjustment*self.S
+
+	def euclid(self,a, b):
+		x0 = 1
+		x1 = 0
+		y0 = 0
+		y1 = 1
+		while b != 0:
+			tempa = a
+			tempb = b
+			q = tempa / tempb
+			a = tempb
+			b = tempa % tempb
+			tempx0 = x0
+			x0 = x1
+			x1 = tempx0 - q * x0
+			tempy0 = y0
+			y0 = y1
+			y1 = tempy0 - q * y0
+		return [a, x0, y0]
+
+	def smith_form(self):
+		self.J = copy.deepcopy(self.matrix)
+		self.S = Matrix.identity(self.matrix.rows())
+		self.T = Matrix.identity(self.matrix.cols())
+
+		for i in range(min(self.J.rows(),self.J.rows())):
+			if self.J[(i,i)] == 0: 
+				foundReplacement = False;
+				for j in range(i, self.J.rows()):
+					if foundReplacement:
+						break
+					for k in range(i,self.J.cols()):
+						if (self.J[(j,k)] != 0):
+							foundReplacement = True
+							break
+				if not foundReplacement:
+					break
+				else:
+					self.rSwap(i,j)
+					self.cSwap(i,k)
+			gcd=self.J[(i,i)]
+			doneIteration = False
+			while not doneIteration:
+				if (self.J[(i,i)]==1 or self.J[(i,i)]==-1):
+					break
+				doneIteration = True
+				for j in range(i+1, self.J.rows()):
+					gcd, x, y = self.euclid(self.J[(i,i)], self.J[(j,i)])
+					if (gcd < 0):
+						gcd = -gcd
+						x = -x
+						y = -y
+					if gcd == self.J[(i,i)]:
+						pass
+					elif gcd == self.J[(j,i)]:
+						self.rSwap(i,j)
+						doneIteration=False
+					elif gcd == -self.J[(j,i)]:
+						self.rSwap(i,j)
+						self.rLC(i,i,i,-1, 0,gcd)
+						doneIteration=False
+					elif gcd < J[(i,i)] or gcd < -self.J[(i,i)]:
+						self.rLC(i, i, j, x, y, gcd)
+						doneIteration=False
+				for j in range(i+1, self.J.cols()):
+					gcd, x, y = self.euclid(self.J[(i,i)], self.J[(i,j)])
+					if (gcd < 0):
+						gcd = -gcd
+						x = -x
+						y = -y
+					if gcd == self.J[(i,i)]:
+						pass
+					elif gcd == self.J[(i,j)]:
+						self.cSwap(i,j)
+						doneIteration=False
+					elif gcd == -self.J[(i,j)]: #TODO WORK THIS BLOCK
+						self.cSwap(i,j)
+						self.cLC(i,i,i,-1, 0,gcd)
+						doneIteration=False
+					elif gcd < self.J[(i,i)] or gcd < -self.J[(i,i)]:
+						self.cLC(i, i, j, x, y, gcd)
+						doneIteration=False
+			doneZeroing = False
+			while not doneZeroing:
+				doneZeroing = True
+				for j in range(i+1, self.J.rows()):
+					if self.J[(j,i)] != 0:
+						self.rLC(i,j,i,1,-self.J[(j,i)]/self.J[(i,i)])
+						if self.J[(j,i)] != 0:
+							doneZeroing = False
+
+				for j in range(i+1, self.J.cols()):
+					if self.J[(i,j)] != 0:
+						self.cLC(i,j,i,1,-self.J[(i,j)]/self.J[(i,i)])
+						if self.J[(i,j)] != 0:
+							doneZeroing = False
+
+		for i in range(min(self.J.cols(), self.J.rows())-1):
+			if self.J[(i+1,i+1)] == 0:
+				return self.S,self.J,self.T
+			gcd, x, y = self.euclid(self.J[(i,i)], self.J[(i+1,i+1)])
+
+			if (gcd == self.J[(i+1,i+1)]):
+				self.cSwap(i, i+1)
+				self.rSwap(i, i+1)
+			elif (gcd != self.J[(i,i)]):
+				self.rLC(i,i, i+1, 1, 1) 
+				self.cLC(i, i, i+1, x, y, gcd)
+				self.cLC(i, i+1, i, 1, -self.J[(i,i+1)]/self.J[(i,i)])
+				self.rLC(i, i+1, i, 1, -self.J[(i+1,i)]/self.J[(i,i)])
+		return self.S,self.J,self.T
+		
+class Solver2:
 	def __init__(self, matrix):
 		self.matrix =  matrix
 		
@@ -866,4 +1048,4 @@ if __name__ == "__main__":
 		numsys4 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
 		numsys5 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-6,-5)})
 		numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		print numsys6.find_congruent((-1,-1))
+		print numsys6.calculate_box_phi()
