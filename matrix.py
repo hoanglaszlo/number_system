@@ -535,7 +535,7 @@ class NumberSystem:
 				xi[(i,j)] = func(matrix[(i,j)] for matrix in matrices)
 		return xi
 		
-	def calculate_box(self, type = "round"):
+	def calculate_box(self, type = "periodic"):
 		c = self.find_c()
 		gamma = self.find_gamma()
 		eta = self.calculate_from_matrices(min).transpose()
@@ -549,20 +549,61 @@ class NumberSystem:
 			l = ((gamma * sum_min).to_int(math.ceil))
 			u = ((gamma * sum_max).to_int(math.floor))
 		if type == "periodic" or type == 3:
-			l = - ((gamma * sum_min).to_int(math.ceil))
-			u = - ((gamma * sum_max).to_int(math.floor))
+			u = - ((gamma * sum_min).to_int(math.ceil))
+			l = - ((gamma * sum_max).to_int(math.floor))
 		return l, u
 		
 	def calculate_box_phi(self):
 		l, u = self.calculate_box()
+		print l, u
 		if l.rows() == 1:
 			for i in range(l[(0,0)], u[(0,0)]+1):
 				print i
 		if l.rows() == 2:
+			n=5
+			graph = Matrix(n*2+1,n*2+1)
 			for i in range(l[(0,0)], u[(0,0)]+1):
 				for j in range(l[(1,0)], u[(1,0)]+1):
 					print (i,j),  "->",  self.phi((i,j))
+					coord = tuple(map(lambda x: x + n, self.phi((i,j))))
+					#if i == u[(1,0)] or i == l[(1,0)]:
+					#	graph[(i+n,j+n)] = 1
+					#if j == l[(0,0)] or j == u[(0,0)]:
+					#	graph[(i+n,j+n)] = 1
+					graph[coord] = 1
+		return graph
 		
+	def classify(self):
+		finished = set()
+		P = set()
+		K = []
+		l, u = self.calculate_box()
+		print l, u
+		for i in range(l[(0,0)], u[(0,0)]+1):
+			for j in range(l[(1,0)], u[(1,0)]+1):
+				K.append((i,j))
+				print (i,j), "->", self.phi((i,j))
+
+		for z in K:
+			if z not in finished:
+				orbit = set()
+				while z not in finished and z in K:
+					orbit.add(z)
+					finished.add(z)
+					z = self.phi(z)
+				if z in orbit:
+					print z
+					print self.get_cycle(z)
+					P.update(self.get_cycle(z))
+		return P
+		
+	def get_cycle(self, element):
+		orbit = set()
+		while element not in orbit:
+			orbit.add(element)
+			element = self.phi(element)
+		return orbit
+
 class Solver:
 	def __init__(self, matrix):
 		self.matrix = matrix
@@ -576,10 +617,10 @@ class Solver:
 			self.J[(k,i)] = self.J[(k,j)]
 			self.J[(k,j)] = temp
 		adjustment = Matrix.identity(self.T.rows())
-		adjustment.set(i,i,0)
-		adjustment.set(j,j,0)
-		adjustment.set(i,j,1)
-		adjustment.set(j,i,1)
+		adjustment[(i,i)] = 0
+		adjustment[(j,j)] = 0
+		adjustment[(i,j)] = 1
+		adjustment[(j,i)] = 1
 		self.T = self.T*adjustment
 
 	def cLC(self,I,i,j,a,b,gcd=None):
@@ -745,84 +786,6 @@ class Solver:
 				self.cLC(i, i+1, i, 1, -self.J[(i,i+1)]/self.J[(i,i)])
 				self.rLC(i, i+1, i, 1, -self.J[(i+1,i)]/self.J[(i,i)])
 		return self.S,self.J,self.T
-		
-class Solver2:
-	def __init__(self, matrix):
-		self.matrix =  matrix
-		
-	def leftmult2(self, m, i0, i1, a, b, c, d):
-		for j in range(self.matrix.cols()):
-			x, y = m[(i0,j)], m[(i1,j)]
-			m[(i0,j)] = a * x + b * y
-			m[(i1,j)] = c * x + d * y
-	 
-	def rightmult2(self, m, j0, j1, a, b, c, d):
-		for i in range(self.matrix.rows()):
-			x, y = m[(i,j0)], m[(i,j1)]
-			m[(i,j0)] = a * x + c * y
-			m[(i,j1)] = b * x + d * y
-	 
-	def smith_form(self, domain=ZZ):
-		s = Matrix.identity(self.matrix.rows())
-		t = Matrix.identity(self.matrix.cols())
-		last_j = -1
-		for i in range(self.matrix.rows()):
-			for j in range(last_j+1, self.matrix.cols()):
-				if any(i != 0 for i in self.matrix.col(j)):
-					break
-			else:
-				break
-			if self.matrix[(i,j)] == 0:
-				for ii in range(self.matrix.rows()):
-					if self.matrix[(ii,j)] != 0:
-						break
-				self.leftmult2(self.matrix, i, ii, 0, 1, 1, 0)
-				self.rightmult2(s, i, ii, 0, 1, 1, 0)
-			self.rightmult2(self.matrix, j, i, 0, 1, 1, 0)
-			self.leftmult2(t, j, i, 0, 1, 1, 0)
-			j = i
-			upd = True
-			while upd:
-				upd = False
-				for ii in range(i+1, self.matrix.rows()):
-					if self.matrix[(ii,j)] == 0:
-						continue
-					upd = True
-					if domain.rem(self.matrix[(ii, j)], self.matrix[(i, j)]) != 0:
-						coef1, coef2, g = domain.gcdex(self.matrix[i,j], self.matrix[ii, j])
-						coef3 = domain.quo(self.matrix[(ii, j)], g)
-						coef4 = domain.quo(self.matrix[(i, j)], g)
-						self.leftmult2(self.matrix,i, ii, coef1, coef2, -coef3, coef4)
-						self.rightmult2(s, i, ii, coef4, -coef2, coef3, coef1)
-					coef5 = domain.quo(self.matrix[(ii, j)], self.matrix[(i, j)])
-					self.leftmult2(self.matrix, i, ii, 1, 0, -coef5, 1)
-					self.rightmult2(s, i, ii, 1, 0, coef5, 1)
-				for jj in range(j+1, self.matrix.cols()):
-					if self.matrix[(i, jj)] == 0:
-						continue
-					upd = True
-					if domain.rem(self.matrix[(i, jj)], self.matrix[(i, j)]) != 0:
-						coef1, coef2, g = domain.gcdex(self.matrix[(i,j)], self.matrix[(i, jj)])
-						coef3 = domain.quo(self.matrix[(i, jj)], g)
-						coef4 = domain.quo(self.matrix[(i, j)], g)
-						self.rightmult2(self.matrix, j, jj, coef1, -coef3, coef2, coef4)
-						self.leftmult2(t, j, jj, coef4, coef3, -coef2, coef1)
-					coef5 = domain.quo(self.matrix[(i, jj)], self.matrix[(i, j)])
-					self.rightmult2(self.matrix, j, jj, 1, -coef5, 0, 1)
-					self.leftmult2(t, j, jj, 1, coef5, 0, 1)
-			last_j = j
-		for i1 in range(min(self.matrix.rows(), self.matrix.cols())):
-			for i0 in reversed(range(i1)):
-				coef1, coef2, g = domain.gcdex(self.matrix[(i0, i0)], self.matrix[(i1,i1)])
-				if g == 0:
-					continue
-				coef3 = domain.quo(self.matrix[(i1, i1)], g)
-				coef4 = domain.quo(self.matrix[(i0, i0)], g)
-				self.leftmult2(self.matrix, i0, i1, 1, coef2, coef3, coef2*coef3-1)
-				self.rightmult2(s, i0, i1, 1-coef2*coef3, coef2, coef3, -1)
-				self.rightmult2(self.matrix, i0, i1, coef1, 1-coef1*coef4, 1, -coef4)
-				self.leftmult2(t, i0, i1, coef4, 1-coef1*coef4, 1, -coef1)
-		return (s, self.matrix, t)
 				
 class MatrixTests(unittest.TestCase):
 	def setUp(self):
@@ -1042,10 +1005,18 @@ if __name__ == "__main__":
 		unittest.main()
 	else:
 		#print "Hooray"
-		numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}) 				#0-0
-		numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}) 			#(0,0)-(0,0)
-		numsys3 = NumberSystem(Matrix([[3]]), {-2,0,2})								#-1
-		numsys4 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
-		numsys5 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-6,-5)})
-		numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		print numsys6.calculate_box_phi()
+		numsys0 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9}) 						#(0)-(0)
+		numsys1 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}) 					#(0,0)-(0,0)
+		numsys2 = NumberSystem(Matrix([[3]]), {-2,0,2})										#(-1)-(1)
+		numsys3 = NumberSystem(Matrix([[0,-3],[1,0]]), {(0,0),(1,0),(-1,1)})				#
+		numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})	#(0,-2)-(2,0)
+		numsys4b1 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,-1),(1,-1),(-1,1)}) #(-0.5,-0.5)-(0.5,0.5)
+		numsys4b2 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(2,0),(0,1),(0,2),(1,2),(2,1),(-1,2),(-2,1)}) #(-1,0)-(1,1)
+		numsys5 = NumberSystem(Matrix([[1,-2],[1,1]]), {(0,0),(1,0),(-1,0)})				#
+		numsys7 = NumberSystem(Matrix([[-3,-1],[1,-3]]), {(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(6,0),(7,0),(8,0),(9,0)})				#?
+		numsys8a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-6,-5)})	#
+		numsys8b = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
+		print numsys8a.classify()
+		#print numsys3.phi((-1,0), 4, True)
+		#U,G,V=Matrix([[2,-1],[1,2]]).smith_form()
+		#print U,G,V
