@@ -435,9 +435,10 @@ class Matrix:
 class NumberSystem:
 	def __init__(self, matrix, digitSet, lattice={}):
 		if not matrix.is_square():
-			raise SquareError("determinant")
+			raise DeterminantError()
 		if matrix.determinant() == 0:
-			raise SquareError("inverse")
+			raise InverseError()
+
 		self.lattice = lattice
 		self.matrix = matrix
 		self.digitSet = digitSet
@@ -604,6 +605,10 @@ class NumberSystem:
 			element = self.phi(element)
 		return orbit
 
+class Algorithm:
+	__init__(self):
+		self.a = a
+	
 class Solver:
 	def __init__(self, matrix):
 		self.matrix = matrix
@@ -1009,14 +1014,11 @@ if __name__ == "__main__":
 		numsys1 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}) 					#(0,0)-(0,0)
 		numsys2 = NumberSystem(Matrix([[3]]), {-2,0,2})										#(-1)-(1)
 		numsys3 = NumberSystem(Matrix([[0,-3],[1,0]]), {(0,0),(1,0),(-1,1)})				#
-		numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})	#(0,-2)-(2,0)
-		numsys4b1 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,-1),(1,-1),(-1,1)}) #(-0.5,-0.5)-(0.5,0.5)
-		numsys4b2 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(2,0),(0,1),(0,2),(1,2),(2,1),(-1,2),(-2,1)}) #(-1,0)-(1,1)
+		numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
+		numsys4b1 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,-1),(1,-1),(-1,1)})
+		numsys4b2 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(2,0),(0,1),(0,2),(1,2),(2,1),(-1,2),(-2,1)})
 		numsys5 = NumberSystem(Matrix([[1,-2],[1,1]]), {(0,0),(1,0),(-1,0)})				#
-		numsys7 = NumberSystem(Matrix([[-3,-1],[1,-3]]), {(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(6,0),(7,0),(8,0),(9,0)})				#?
+		numsys7 = NumberSystem(Matrix([[-3,-1],[1,-3]]), {(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(6,0),(7,0),(8,0),(9,0)})
 		numsys8a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-6,-5)})	#
 		numsys8b = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		print numsys8a.classify()
-		#print numsys3.phi((-1,0), 4, True)
-		#U,G,V=Matrix([[2,-1],[1,2]]).smith_form()
-		#print U,G,V
+		print numsys4a.classify()
