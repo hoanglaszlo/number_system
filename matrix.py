@@ -3,7 +3,6 @@ import sys
 import random
 import operator
 import unittest
-from sympy import *
 from sympy import Matrix as Mat
 import copy
 import math
@@ -73,13 +72,11 @@ class Matrix:
 		if self.cols() > 1:
 			for row in self.matrix:
 				s += "%s\n" % row
-			return s
 		elif self.cols() == 1:
-			s += "("
 			for row in self.matrix:
 				s += "%s, " % row[0]
-			s = s[:-2] + ")"
-			return s
+			s = "(" + s[:-2] + ")"
+		return s
 
 	def __getitem__(self, (row, col)):
 		return self.matrix[row][col]
@@ -92,12 +89,12 @@ class Matrix:
 			raise TypeError("Cannot add a matrix and a %s" % type(other))
 		if not (self.cols() == other.cols() and self.rows() == other.rows()):
 			raise MatrixAdditionError(self, other)
-		r = []
+		rows = []
 		for row in xrange(self.rows()):
-			r.append([])
+			rows.append([])
 			for col in xrange(self.cols()):
-				r[row].append(self[(row, col)] + other[(row, col)])
-		return Matrix(r)
+				rows[row].append(self[(row, col)] + other[(row, col)])
+		return Matrix(rows)
 
 	def __sub__(self, other):
 		return self + -other
@@ -121,10 +118,23 @@ class Matrix:
 		return self.scalar_multiply(other)
 
 	def __eq__(self, other):
+		if isinstance(other, int):
+			return self[(0,0)] == other
 		if not isinstance(other, Matrix):
 			raise TypeError("Cannot equal a matrix and a %s" % type(other))
 		return all(self.row(i) == other.row(i) for i in xrange(self.rows()))
 
+	def __ne__(self, other):
+		return not self.__eq__(other)
+		
+	def __pow__(self, n):
+		result = self.identity(self.rows())
+		for i in xrange(abs(n)):
+			result *= self
+		if  n < 0:
+			return result.inverse()
+		return result
+		
 	def scalar_multiply(self, scalar):
 		if not self.is_scalar_element(scalar):
 			raise TypeError("Cannot multiply matrix and type %s" % type(other))
@@ -143,10 +153,7 @@ class Matrix:
 			rows.append([])
 			for col in xrange(other.cols()):
 				rows[row].append(self.vector_inner_product(self.row(row), other.col(col)))
-		if len(rows) == 1 and len(rows[0]) == 1:
-			return rows[0][0]
-		else:
-			return Matrix(rows)
+		return Matrix(rows)
 
 	def tuple_multiply(self, other):
 		if not isinstance(other, tuple):
@@ -157,10 +164,7 @@ class Matrix:
 		for row in xrange(self.rows()):
 			rows.append([])
 			rows[row].append(self.vector_inner_product(self.row(row), other))
-		if len(rows) == 1 and len(rows[0]) == 1:
-			return rows[0][0]
-		else:
-			return Matrix(rows)
+		return Matrix(rows)
 
 	def vector_inner_product(self, elementLeft, elementRight):
 		if not isinstance(elementLeft, types.ListType):
@@ -168,18 +172,6 @@ class Matrix:
 		if not isinstance(elementRight, types.ListType) and not isinstance(elementRight, types.TupleType):
 			raise TypeError("Only two lists are accepted.")
 		return reduce(operator.add, map(operator.mul, elementLeft, elementRight))
-
-	def is_scalar_element(self, element):
-		return isinstance(element, types.IntType) or isinstance(element, types.FloatType) or isinstance(element, types.ComplexType)
-
-	def is_row_vector(self):
-		return self.rows() == 1 and self.cols() > 1
-
-	def is_column_vector(self):
-		return self.cols() == 1 and self.rows() > 1
-	
-	def is_vector(self):
-		return self.is_row_vector() or self.is_column_vector()
 	
 	def row(self, index):
 		return self.matrix[index]
@@ -197,33 +189,23 @@ class Matrix:
 		return len(self.matrix[0])
 		
 	def make_list(self):
-		return [number for sublist in self.matrix for number in sublist]
+		return [element for row in self.matrix for element in row]
 		
 	def is_square(self):
 		return self.rows() == self.cols()
 		
-	def zeros(self, row, col):
-		if not row > 0:
-			raise ValueError("Invalid number of rows (given %d)" % row)
-		if not col > 0:
-			raise ValueError("Invalid number of columns (given %d)" % col)
-		self.matrix = []
-		for i in xrange(row):
-			self.matrix.append([])
-			for j in xrange(col):
-				self.matrix[i].append(0)
+	def is_scalar_element(self, element):
+		return isinstance(element, types.IntType) or isinstance(element, types.FloatType) or isinstance(element, types.ComplexType)
+
+	def is_row_vector(self):
+		return self.rows() == 1 and self.cols() > 1
+
+	def is_column_vector(self):
+		return self.cols() == 1 and self.rows() > 1
+	
+	def is_vector(self):
+		return self.is_row_vector() or self.is_column_vector()
 				
-	def ones(self, row, col):
-		if not row > 0:
-			raise ValueError("Invalid number of rows (given %d)" % row)
-		if not col > 0:
-			raise ValueError("Invalid number of columns (given %d)" % col)
-		self.matrix = []
-		for i in xrange(row):
-			self.matrix.append([])
-			for j in xrange(col):
-				self.matrix[i].append(1)
-		
 	def determinant(self):
 		if not self.is_square():
 			raise SquareError("determinant")
@@ -368,14 +350,6 @@ class Matrix:
 	def transpose(self):
 		return Matrix([self.col(i) for i in xrange(self.cols())])
 		
-	def power(self, c):
-		m = copy.deepcopy(self)
-		for i in xrange(1,c):
-			m = m * self
-		if isinstance(m, int):
-			m = Matrix([[m]])
-		return m
-		
 	def to_tuple(self):
 		if not self.cols() == 1:
 			raise Form("Only n:1 matrix can be converted.")
@@ -390,14 +364,16 @@ class Matrix:
 			rows.append([int(func(element)) for element in row])
 		return Matrix(rows)
 		
-	@classmethod
-	def from_tuple(cls, tup):
-		if not isinstance(tup, tuple):
-			raise TypeError("Cannot convert into matrix from type %s" % type(tup))
-		rows = []
-		for element in tup:
-			rows.append([element])
-		return Matrix(rows)
+	def zeros(self, row, col, init = 0):
+		if not row > 0:
+			raise ValueError("Invalid number of rows (given %d)" % row)
+		if not col > 0:
+			raise ValueError("Invalid number of columns (given %d)" % col)
+		self.matrix = []
+		for i in xrange(row):
+			self.matrix.append([])
+			for j in xrange(col):
+				self.matrix[i].append(init)	
 		
 	@classmethod
 	def make_random(cls, m, n, low=0, high=10):
@@ -424,7 +400,16 @@ class Matrix:
 			row = [int(number) for number in line.split()]
 			rows.append(row)
 		return Matrix(rows)
-		
+
+	@classmethod
+	def read_tuple(cls, tup):
+		if not isinstance(tup, tuple):
+			raise TypeError("Cannot convert into matrix from type %s" % type(tup))
+		rows = []
+		for element in tup:
+			rows.append([element])
+		return Matrix(rows)
+
 	@classmethod
 	def identity(cls, rank):
 		matrix = Matrix(rank)
@@ -434,11 +419,13 @@ class Matrix:
 
 class NumberSystem:
 	def __init__(self, matrix, digitSet, lattice={}):
-		if not matrix.is_square():
-			raise DeterminantError()
-		if matrix.determinant() == 0:
-			raise InverseError()
-
+		if isinstance(matrix, int):
+			matrix = Matrix([[matrix]])
+		if isinstance(matrix, Matrix):
+			if not matrix.is_square():
+				raise SquareError("determinant")
+			if matrix.determinant() == 0:
+				raise SquareError("inverse")
 		self.lattice = lattice
 		self.matrix = matrix
 		self.digitSet = digitSet
@@ -460,19 +447,19 @@ class NumberSystem:
 		return self.hash_function(U * elementOne, G) == self.hash_function(U * elementTwo, G)
 
 	def find_congruent(self, element):
-		for i in self.digitSet:
-			if self.is_congruent(i, element):
-				return i
+		for digit in self.digitSet:
+			if self.is_congruent(digit, element):
+				return digit
 				
 	def is_complete_residues_system(self):
-		for i in self.digitSet:
-			if any(self.is_congruent(i,j) for j in self.digitSet - {i}):
+		for digit in self.digitSet:
+			if any(self.is_congruent(digit, other) for other in self.digitSet - {digit}):
 				return False
 		return True
 
 	def is_expansive(self):
 		eigens = self.matrix.eigenvalues()
-		return all((abs(i)>1) for i in eigens)
+		return all((abs(value)>1) for value in eigens)
 
 	def unit_condition(self):
 		n = self.matrix.rows()
@@ -506,21 +493,21 @@ class NumberSystem:
 		
 	def find_c(self):
 		c = 1
-		while not self.matrix.power(c).inverse().norm("inf") < 0.001:
+		while not Algorithm(self.matrix ** -c).norm("inf") < 0.001:
 			c += 1
 		return c
 		
 	def find_gamma(self):
 		c = self.find_c()
-		norm = self.matrix.power(c).inverse().norm("inf")
-		gamma = operator.truediv(1,1-norm)
+		norm = (self.matrix**-c).norm("inf")
+		gamma = 1 / (1 - norm)
 		return gamma
 	
 	def calculate_xi_product(self, digit):
 		c = self.find_c()
 		matrix = Matrix(self.matrix.rows(),1)
 		for j in xrange(1,c+1):
-			matrix = stackh(matrix, self.matrix.power(j).inverse() * digit)
+			matrix = stackh(matrix, (self.matrix**-j) * digit)
 		matrix = matrix.cut(left=1)
 		return matrix
 		
@@ -536,13 +523,13 @@ class NumberSystem:
 				xi[(i,j)] = func(matrix[(i,j)] for matrix in matrices)
 		return xi
 		
-	def calculate_box(self, type = "periodic"):
+	def calculate_box(self, type = "round"):
 		c = self.find_c()
 		gamma = self.find_gamma()
 		eta = self.calculate_from_matrices(min).transpose()
 		xi = self.calculate_from_matrices(max).transpose()
-		sum_min = sum((Matrix.from_tuple(tuple(col)) for col in eta.matrix), Matrix(self.matrix.rows(), 1))
-		sum_max = sum((Matrix.from_tuple(tuple(col)) for col in xi.matrix) , Matrix(self.matrix.rows(), 1))
+		sum_min = sum((Matrix.read_tuple(tuple(col)) for col in eta.matrix), Matrix(self.matrix.rows(), 1))
+		sum_max = sum((Matrix.read_tuple(tuple(col)) for col in xi.matrix) , Matrix(self.matrix.rows(), 1))
 		if type == "original" or type == 1:
 			l = gamma * sum_min
 			u = gamma * sum_max
@@ -550,8 +537,8 @@ class NumberSystem:
 			l = ((gamma * sum_min).to_int(math.ceil))
 			u = ((gamma * sum_max).to_int(math.floor))
 		if type == "periodic" or type == 3:
-			u = - ((gamma * sum_min).to_int(math.ceil))
-			l = - ((gamma * sum_max).to_int(math.floor))
+			l = - ((gamma * sum_min).to_int(math.ceil))
+			u = - ((gamma * sum_max).to_int(math.floor))
 		return l, u
 		
 	def calculate_box_phi(self):
@@ -573,42 +560,117 @@ class NumberSystem:
 					#	graph[(i+n,j+n)] = 1
 					graph[coord] = 1
 		return graph
-		
+
 	def classify(self):
 		finished = set()
 		P = set()
 		K = []
 		l, u = self.calculate_box()
 		print l, u
-		for i in range(l[(0,0)], u[(0,0)]+1):
-			for j in range(l[(1,0)], u[(1,0)]+1):
+		for i in range(u[(0,0)], l[(0,0)]+1):
+			for j in range(u[(1,0)], l[(1,0)]+1):
 				K.append((i,j))
-				print (i,j), "->", self.phi((i,j))
-
+		print K
 		for z in K:
 			if z not in finished:
 				orbit = set()
-				while z not in finished and z in K:
+				while True:
 					orbit.add(z)
 					finished.add(z)
 					z = self.phi(z)
+					if z in finished or z not in K:
+						break
 				if z in orbit:
-					print z
-					print self.get_cycle(z)
 					P.update(self.get_cycle(z))
 		return P
 		
 	def get_cycle(self, element):
-		orbit = set()
-		while element not in orbit:
-			orbit.add(element)
-			element = self.phi(element)
+		orbit = {element}
+		while self.phi(element) not in orbit:
+			orbit.add(self.phi(element))
 		return orbit
 
 class Algorithm:
-	__init__(self):
-		self.a = a
-	
+	def __init__(self, matrix):
+		self.matrix = matrix
+		
+	def transpose(self):
+		return Matrix([self.matrix.col(i) for i in xrange(self.matrix.cols())])
+		
+	def norm(self, type=2):
+		if type == 1:
+			return self._norm1()
+		elif type == 2:
+			return self._norm2()
+		elif type == 'inf':
+			return self._norm_inf()
+		elif type == 'fro':
+			return self._norm_fro()
+		else:
+			raise Exception('Illegal norm type')
+
+	def _norm1(self):
+		max = -1
+		for j in xrange(self.matrix.cols()):
+			value = sum(tuple(map(abs, self.matrix.col(j))))
+			if value > max:
+				max = value
+		return max
+
+	def _norm2(self):
+		if not (self.matrix.is_row_vector() or self.matrix.is_column_vector()):
+			#return math.sqrt(max((self.transpose() * self).eigenvalues()))
+			raise FormError("Form not accepted.")
+		elif self.matrix.is_row_vector():
+			return math.sqrt(sum(tuple(map(lambda x: abs(x ** 2), self.matrix.row(0)))))
+		elif self.matrix.is_column_vector():
+			return math.sqrt(sum(tuple(map(lambda x: abs(x ** 2), self.matrix.col(0)))))
+
+	def _norm_inf(self):
+		max = -1
+		for i in xrange(self.matrix.rows()):
+			value = sum(tuple(map(abs, self.matrix.row(i))))
+			if value > max:
+				max = value
+		return max
+
+	def _norm_fro(self):
+		sum = 0
+		for i in xrange(self.matrix.rows()):
+			for j in xrange(self.matrix.cols()):
+				value = self.matrix[(i,j)]
+				sum += abs(value ** 2)
+		return math.sqrt(sum)	
+		
+	def cut(self, left = 0, right = None, top = 0, bottom = None):
+		if right is None:
+			right = self.matrix.cols()
+		if bottom is None:
+			bottom = self.matrix.rows()
+		if not (left >= 0 and left < self.matrix.cols()):
+			raise ValueError("left out of bounds")
+		if not (right > 0 and right <= self.matrix.cols()):
+			raise ValueError("right out of bounds")
+		if not (top >= 0 and top < self.matrix.rows()):
+			raise ValueError("top out of bounds")
+		if not (bottom > 0 and bottom <= self.matrix.rows()):
+			raise ValueError("bottom out of bounds'")
+		if not (left < right):
+			raise ValueError("left must be smaller than right")
+		if not (top < bottom): 
+			raise ValueError("top must be smaller than bottom")
+		width = right - left
+		height = bottom - top
+		flat_values = self.matrix.make_list()
+		rows = []
+		for row in xrange(height):
+			newrow = []
+			for col in xrange(width):
+				value = flat_values[self.matrix.cols() * top + left + self.matrix.cols() * row + col]
+				newrow.append(value)
+			rows.append(newrow)
+		return Matrix(rows)	
+		
 class Solver:
 	def __init__(self, matrix):
 		self.matrix = matrix
@@ -895,13 +957,13 @@ class NumberSystemTests(unittest.TestCase):
 		self.mat3 = Matrix([[1,1,1],[4,1,5],[2,8,7]])
 		self.mat4 = Matrix([[1,1,1],[4,1,5],[2,8,1]])
 		
-		self.numsys1 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,9})
+		self.numsys1 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,9})
 		self.numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		self.numsys3 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,18})
-		self.numsys4 = NumberSystem(Matrix([[10]]), {0,1,2,3,4,5,6,7,8,39})
+		self.numsys3 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,18})
+		self.numsys4 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,39})
 		self.numsys5 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(1,1),(1,0)})
 		self.numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		self.numsys7 = NumberSystem(Matrix([[3]]), {-2,0,2})
+		self.numsys7 = NumberSystem(3, {-2,0,2})
 		self.numsys8 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
 			
 	def testFindInDiagonal(self):
@@ -965,8 +1027,17 @@ class NumberSystemTests(unittest.TestCase):
 		self.assertEqual(self.numsys6.calculate_box(), (Matrix([[-2],[-1]]),Matrix([[0],[0]])))
 		self.assertEqual(self.numsys8.calculate_box(), (Matrix([[0],[-2]]),Matrix([[2],[0]])))
 		
+class AlgorithmTests(unittest.TestCase):
+	def setUp(self):
+		self.al = Algorithm(Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+		
+	def testNorm(self):
+		self.assertAlmostEqual(self.al.norm(1), 1)
+		#self.assertAlmostEqual(self.m1.norm(2), 1)
+		self.assertAlmostEqual(self.al.norm("inf"), 1)
+		self.assertAlmostEqual(self.al.norm("fro"), 1.732, 3)
+		
 def stackh(*matrices):
-	matrices = _normalize_args(matrices)
 	assert len(matrices) > 0, 'Can\'t stack zero matrices'
 	for matrix in matrices:
 		assert isinstance(matrix, Matrix), 'Can only stack matrices'
@@ -982,7 +1053,6 @@ def stackh(*matrices):
 	return Matrix(values)
 
 def stackv(*matrices):
-	matrices = _normalize_args(matrices)
 	assert len(matrices) > 0, 'Can\'t stack zero matrices'
 	for matrix in matrices:
 		assert isinstance(matrix, Matrix), 'Can only stack matrices'
@@ -993,17 +1063,11 @@ def stackv(*matrices):
 	for matrix in matrices:
 		values += matrix.matrix
 	return Matrix(values)		
+	
+def prod(iterable):
+    return reduce(operator.mul, iterable, 1)
 
-def _normalize_args(matrices):
-	if len(matrices) > 0:
-		first_elem = matrices[0]
-		if isinstance(first_elem, list) or isinstance(first_elem, tuple):
-			assert len(matrices) == 1, 'Couldn\'t normalize arguments'
-			return first_elem
-		return matrices
-	return matrices
-
-test = False
+test = True
 
 if __name__ == "__main__":
 	if test:
@@ -1014,11 +1078,11 @@ if __name__ == "__main__":
 		numsys1 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}) 					#(0,0)-(0,0)
 		numsys2 = NumberSystem(Matrix([[3]]), {-2,0,2})										#(-1)-(1)
 		numsys3 = NumberSystem(Matrix([[0,-3],[1,0]]), {(0,0),(1,0),(-1,1)})				#
-		numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
-		numsys4b1 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,-1),(1,-1),(-1,1)})
-		numsys4b2 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(2,0),(0,1),(0,2),(1,2),(2,1),(-1,2),(-2,1)})
+		numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})	#(0,-2)-(2,0)
+		numsys4b1 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,-1),(1,-1),(-1,1)}) #(-0.5,-0.5)-(0.5,0.5)
+		numsys4b2 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(2,0),(0,1),(0,2),(1,2),(2,1),(-1,2),(-2,1)}) #(-1,0)-(1,1)
 		numsys5 = NumberSystem(Matrix([[1,-2],[1,1]]), {(0,0),(1,0),(-1,0)})				#
-		numsys7 = NumberSystem(Matrix([[-3,-1],[1,-3]]), {(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(6,0),(7,0),(8,0),(9,0)})
+		numsys7 = NumberSystem(Matrix([[-3,-1],[1,-3]]), {(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(6,0),(7,0),(8,0),(9,0)})				#?
 		numsys8a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-6,-5)})	#
 		numsys8b = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		print numsys4a.classify()
+		print numsys8a.classify()
