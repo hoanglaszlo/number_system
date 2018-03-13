@@ -1,12 +1,11 @@
-import types
 import sys
 import random
 import operator
 import unittest
+from sympy import *
 from sympy import Matrix as Mat
 import copy
 import math
-import cmath
 
 class MatrixError(Exception):
 	pass
@@ -49,18 +48,45 @@ class FormError(MatrixError):
 
 	def __str__(self):
 		return "%s" % self.msg
-			
+
+class Encoder:
+	def __init__(self, filename, inverse = False):
+		self.sequence = self.read(filename)
+		self.hash_table = self.create_hash_table()
+		self.encoded = ""
+		self.inverse = inverse
+		self.code(inverse)
+		
+	def __str__(self):
+		return self.encoded
+		
+	def read(self, filename):
+		with open('Phyllorhiza_punctata.txt', 'r') as myfile:
+			self.sequence = myfile.read().replace('\n', '')
+		return self.sequence
+		
+	def create_hash_table(self):
+		return {'a': '0', 'c': '1', 'g': '2', 't': '3', " " : ""}
+		
+	def code(self, inverse):
+		if not inverse:
+			for base in self.sequence:
+				self.encoded += self.hash_table[base]
+		else:
+			for base in self.sequence:
+				self.encoded = self.hash_table[base] + self.encoded
+		
 class Matrix:
 	def __init__(self, *args):
 		if len(args) == 2:
-			if isinstance(args[0], types.IntType) and isinstance(args[1], types.IntType):
+			if isinstance(args[0], int) and isinstance(args[1], int):
 				self.zeros(args[0], args[1])
 			else:
 				raise TypeError("Only two integer arguments are accepted.")
 		elif len(args) == 1:
-			if isinstance(args[0], types.IntType):
+			if isinstance(args[0], int):
 				self.zeros(args[0], args[0])
-			elif isinstance(args[0], types.ListType):
+			elif isinstance(args[0], list):
 				self.matrix = args[0]
 			else:
 				raise TypeError("Only an integer or a list is accepted for one argument.")
@@ -132,7 +158,7 @@ class Matrix:
 		for i in xrange(abs(n)):
 			result *= self
 		if  n < 0:
-			return result.inverse()
+			return Algorithm(result).inverse()
 		return result
 		
 	def scalar_multiply(self, scalar):
@@ -167,20 +193,28 @@ class Matrix:
 		return Matrix(rows)
 
 	def vector_inner_product(self, elementLeft, elementRight):
-		if not isinstance(elementLeft, types.ListType):
+		if not isinstance(elementLeft, list):
 			raise TypeError("Only two lists are accepted.")
-		if not isinstance(elementRight, types.ListType) and not isinstance(elementRight, types.TupleType):
+		if not isinstance(elementRight, list) and not isinstance(elementRight, tuple):
 			raise TypeError("Only two lists are accepted.")
 		return reduce(operator.add, map(operator.mul, elementLeft, elementRight))
 	
 	def row(self, index):
 		return self.matrix[index]
 		
+	def row_add(self, indexOne, indexTwo, mul):
+		value =  (Matrix([self.matrix[indexOne]]) + mul * Matrix([self.matrix[indexTwo]])).row(0)
+		self.matrix[indexOne] = value
+		
 	def col(self, index):
 		col = []
 		for row in self.matrix:
 			col.append(row[index])
 		return col
+		
+	def col_add(self, indexOne, indexTwo, mul):
+		value =  (Matrix([self.col(indexOne)]) + mul * Matrix([self.col(indexTwo)])).row(0)
+		self.matrix[indexOne] = value
 		
 	def rows(self):
 		return len(self.matrix)
@@ -195,7 +229,7 @@ class Matrix:
 		return self.rows() == self.cols()
 		
 	def is_scalar_element(self, element):
-		return isinstance(element, types.IntType) or isinstance(element, types.FloatType) or isinstance(element, types.ComplexType)
+		return isinstance(element, int) or isinstance(element, float) or isinstance(element, complex)
 
 	def is_row_vector(self):
 		return self.rows() == 1 and self.cols() > 1
@@ -205,150 +239,10 @@ class Matrix:
 	
 	def is_vector(self):
 		return self.is_row_vector() or self.is_column_vector()
-				
-	def determinant(self):
-		if not self.is_square():
-			raise SquareError("determinant")
-		if self.rows() == 1:
-			return self.matrix[0][0]
-		i = 0
-		sum = 0
-		for j in xrange(self.rows()):
-			if self.matrix[i][j] == 0:
-				continue
-			value = (-1) ** (i + j) * self.matrix[i][j] * self._A_ij(i, j).determinant()
-			sum += value
-		return sum
-	
-	def inverse(self):
-		if not self.is_square():
-			raise SquareError("inverse")
-		if self.rows() == 1:
-			return Matrix([[operator.truediv(1,self.matrix[0][0])]])
-		d = self.determinant()
-		if abs(d) < 10**-4:
-			raise Exception('Matrix is not invertible')
-		return operator.truediv(1,d) * self.adjugate()
-	
-	def cut(self, left = 0, right = None, top = 0, bottom = None):
-		if right is None:
-			right = self.cols()
-		if bottom is None:
-			bottom = self.rows()
-		if not (left >= 0 and left < self.cols()):
-			raise ValueError("left out of bounds")
-		if not (right > 0 and right <= self.cols()):
-			raise ValueError("right out of bounds")
-		if not (top >= 0 and top < self.rows()):
-			raise ValueError("top out of bounds")
-		if not (bottom > 0 and bottom <= self.rows()):
-			raise ValueError("bottom out of bounds'")
-		if not (left < right):
-			raise ValueError("left must be smaller than right")
-		if not (top < bottom): 
-			raise ValueError("top must be smaller than bottom")
-		width = right - left
-		height = bottom - top
-		flat_values = self.make_list()
-		rows = []
-		for row in xrange(height):
-			newrow = []
-			for col in xrange(width):
-				value = flat_values[self.cols() * top + left + self.cols() * row + col]
-				newrow.append(value)
-			rows.append(newrow)
-		return Matrix(rows)	
-
-	def _A_ij(self, i, j):
-		if not (i >= 0 and i < self.rows()):
-			raise ValueError("i out of bounds")
-		if not (j >= 0 and j < self.cols()):
-			raise ValueError("j out of bounds")
-		if i == 0:
-			m1 = self.cut(top = 1)
-		elif i == self.rows() - 1:
-			m1 = self.cut(bottom = self.rows() - 1)
-		else:
-			tm1 = self.cut(bottom = i)
-			tm2 = self.cut(top = i + 1)
-			m1 = stackv(tm1, tm2)
-		if j == 0:
-			m2 = m1.cut(left = 1)
-		elif j == m1.cols() - 1:
-			m2 = m1.cut(right = m1.cols() - 1)
-		else:
-			tm1 = m1.cut(right = j)
-			tm2 = m1.cut(left = j + 1)
-			m2 = stackh(tm1, tm2)
-		return m2		
-
-	def adjugate(self):
-		if not self.is_square():
-			raise SquareError("adjugate")
-		rows = []
-		for i in xrange(self.rows()):
-			row = []
-			for j in xrange(self.rows()):
-				value = (-1) ** (i + j) * self._A_ij(j, i).determinant()
-				row.append(value)
-			rows.append(row)
-		return Matrix(rows)		
-			
-	def smith_form(self):
-		m = copy.deepcopy(self)
-		U, G, V = Solver(m).smith_form()
-		return U, G, V
-
-	def eigenvalues(self):
-		return Mat(self.matrix).eigenvals()
 		
-	def norm(self, type=2):
-		if type == 1:
-			return self._norm1()
-		elif type == 2:
-			return self._norm2()
-		elif type == 'inf':
-			return self._norm_inf()
-		elif type == 'fro':
-			return self._norm_fro()
-		else:
-			raise Exception('Illegal norm type')
-
-	def _norm1(self):
-		max = -1
-		for j in xrange(self.cols()):
-			value = sum(tuple(map(abs, self.col(j))))
-			if value > max:
-				max = value
-		return max
-
-	def _norm2(self):
-		if not (self.is_row_vector() or self.is_column_vector()):
-			#return math.sqrt(max((self.transpose() * self).eigenvalues()))
-			raise FormError("Form not accepted.")
-		elif self.is_row_vector():
-			return math.sqrt(sum(tuple(map(lambda x: abs(x ** 2), self.row(0)))))
-		elif self.is_column_vector():
-			return math.sqrt(sum(tuple(map(lambda x: abs(x ** 2), self.col(0)))))
-
-	def _norm_inf(self):
-		max = -1
-		for i in xrange(self.rows()):
-			value = sum(tuple(map(abs, self.row(i))))
-			if value > max:
-				max = value
-		return max
-
-	def _norm_fro(self):
-		sum = 0
-		for i in xrange(self.rows()):
-			for j in xrange(self.cols()):
-				value = self.matrix[i][j]
-				sum += abs(value ** 2)
-		return math.sqrt(sum)
-		
-	def transpose(self):
-		return Matrix([self.col(i) for i in xrange(self.cols())])
+	def is_expansive(self):
+		eigens = Algorithm(self).eigenvalues()
+		return all((abs(value)>1) for value in eigens)
 		
 	def to_tuple(self):
 		if not self.cols() == 1:
@@ -358,7 +252,7 @@ class Matrix:
 			list.append(row[0])
 		return tuple(list)
 		
-	def to_int(self, func=int):
+	def to_int(self, func = int):
 		rows = []
 		for row in self.matrix:
 			rows.append([int(func(element)) for element in row])
@@ -375,6 +269,34 @@ class Matrix:
 			for j in xrange(col):
 				self.matrix[i].append(init)	
 		
+	@classmethod
+	def diagonal(self, diag):
+		n = len(diag)
+		rows = []
+		for i in xrange(n):
+			rows.append([])
+			for j in xrange(n):
+				if i == j:
+					rows[i].append(diag[i])	
+				else:
+					rows[i].append(0)
+		return Matrix(rows)
+	
+	@classmethod
+	def companion(self, polynom):
+		n = len(polynom) - 1
+		rows = []
+		for i in xrange(n):
+			rows.append([])
+			for j in xrange(n):
+				if j == n - 1:
+					rows[i].append(-polynom[i])	
+				elif i == j + 1:
+					rows[i].append(1)
+				else:
+					rows[i].append(0)
+		return Matrix(rows)
+	
 	@classmethod
 	def make_random(cls, m, n, low=0, high=10):
 		rows = []
@@ -417,179 +339,8 @@ class Matrix:
 			matrix[(index, index)] = 1
 		return matrix
 
-class NumberSystem:
-	def __init__(self, matrix, digitSet, lattice={}):
-		if isinstance(matrix, int):
-			matrix = Matrix([[matrix]])
-		if isinstance(matrix, Matrix):
-			if not matrix.is_square():
-				raise SquareError("determinant")
-			if matrix.determinant() == 0:
-				raise SquareError("inverse")
-		self.lattice = lattice
-		self.matrix = matrix
-		self.digitSet = digitSet
-
-	def find_in_diagonal(self, G, number):
-		for index in xrange(G.rows()):
-			if G[(index, index)] != number:
-				return index 
-		return G.rows()
-
-	def hash_function(self, U, G):
-		s = self.find_in_diagonal(G, 1)
-		return sum((U[(i,0)] % G[(i,i)]) * prod(G[(j,j)] for j in range(s, i)) for i in range(s, U.rows()))
-
-	def is_congruent(self, elementOne, elementTwo):
-		U, G, V = self.matrix.smith_form()
-		if not (abs(U.determinant()) == 1 and abs(V.determinant()) == 1):
-			raise FormError("Smith normal form error")
-		return self.hash_function(U * elementOne, G) == self.hash_function(U * elementTwo, G)
-
-	def find_congruent(self, element):
-		for digit in self.digitSet:
-			if self.is_congruent(digit, element):
-				return digit
-				
-	def is_complete_residues_system(self):
-		for digit in self.digitSet:
-			if any(self.is_congruent(digit, other) for other in self.digitSet - {digit}):
-				return False
-		return True
-
-	def is_expansive(self):
-		eigens = self.matrix.eigenvalues()
-		return all((abs(value)>1) for value in eigens)
-
-	def unit_condition(self):
-		n = self.matrix.rows()
-		tmp = self.matrix.identity(n) - self.matrix
-		return abs(tmp.determinant()) != 1
-
-	def check(self):
-		if self.is_expansive() and self.is_complete_residues_system():
-			if self.unit_condition():
-				return True
-			else:
-				print "It is okay, but... unit_condition failed"
-		return False
-			
-	def phi(self, element, n = 1, save = False):
-		digSet = []
-		M_inv = self.matrix.inverse()
-		for i in range(n):
-			d = self.find_congruent(element)
-			digSet.append(element)
-			if self.matrix.is_scalar_element(element):
-				k = M_inv * (element - d)
-				element = int(k[(0,0)])
-			elif isinstance(element, tuple):
-				k = M_inv * tuple(map(lambda x, y: x - y, element, d))
-				element = k.to_int().to_tuple()
-		if save:
-			return digSet
-		else:
-			return element
-		
-	def find_c(self):
-		c = 1
-		while not Algorithm(self.matrix ** -c).norm("inf") < 0.001:
-			c += 1
-		return c
-		
-	def find_gamma(self):
-		c = self.find_c()
-		norm = (self.matrix**-c).norm("inf")
-		gamma = 1 / (1 - norm)
-		return gamma
+#class Vector(Matrix):
 	
-	def calculate_xi_product(self, digit):
-		c = self.find_c()
-		matrix = Matrix(self.matrix.rows(),1)
-		for j in xrange(1,c+1):
-			matrix = stackh(matrix, (self.matrix**-j) * digit)
-		matrix = matrix.cut(left=1)
-		return matrix
-		
-	def calculate_from_matrices(self, func):
-		c = self.find_c()
-		xi = Matrix(self.matrix.rows(), c)	
-		matrices = []
-		for digit in self.digitSet:
-			matrices.append(self.calculate_xi_product(digit))
-	
-		for i in xrange(xi.rows()):
-			for j in xrange(xi.cols()):
-				xi[(i,j)] = func(matrix[(i,j)] for matrix in matrices)
-		return xi
-		
-	def calculate_box(self, type = "round"):
-		c = self.find_c()
-		gamma = self.find_gamma()
-		eta = self.calculate_from_matrices(min).transpose()
-		xi = self.calculate_from_matrices(max).transpose()
-		sum_min = sum((Matrix.read_tuple(tuple(col)) for col in eta.matrix), Matrix(self.matrix.rows(), 1))
-		sum_max = sum((Matrix.read_tuple(tuple(col)) for col in xi.matrix) , Matrix(self.matrix.rows(), 1))
-		if type == "original" or type == 1:
-			l = gamma * sum_min
-			u = gamma * sum_max
-		if type == "round" or type == 2:
-			l = ((gamma * sum_min).to_int(math.ceil))
-			u = ((gamma * sum_max).to_int(math.floor))
-		if type == "periodic" or type == 3:
-			l = - ((gamma * sum_min).to_int(math.ceil))
-			u = - ((gamma * sum_max).to_int(math.floor))
-		return l, u
-		
-	def calculate_box_phi(self):
-		l, u = self.calculate_box()
-		print l, u
-		if l.rows() == 1:
-			for i in range(l[(0,0)], u[(0,0)]+1):
-				print i
-		if l.rows() == 2:
-			n=5
-			graph = Matrix(n*2+1,n*2+1)
-			for i in range(l[(0,0)], u[(0,0)]+1):
-				for j in range(l[(1,0)], u[(1,0)]+1):
-					print (i,j),  "->",  self.phi((i,j))
-					coord = tuple(map(lambda x: x + n, self.phi((i,j))))
-					#if i == u[(1,0)] or i == l[(1,0)]:
-					#	graph[(i+n,j+n)] = 1
-					#if j == l[(0,0)] or j == u[(0,0)]:
-					#	graph[(i+n,j+n)] = 1
-					graph[coord] = 1
-		return graph
-
-	def classify(self):
-		finished = set()
-		P = set()
-		K = []
-		l, u = self.calculate_box()
-		print l, u
-		for i in range(u[(0,0)], l[(0,0)]+1):
-			for j in range(u[(1,0)], l[(1,0)]+1):
-				K.append((i,j))
-		print K
-		for z in K:
-			if z not in finished:
-				orbit = set()
-				while True:
-					orbit.add(z)
-					finished.add(z)
-					z = self.phi(z)
-					if z in finished or z not in K:
-						break
-				if z in orbit:
-					P.update(self.get_cycle(z))
-		return P
-		
-	def get_cycle(self, element):
-		orbit = {element}
-		while self.phi(element) not in orbit:
-			orbit.add(self.phi(element))
-		return orbit
-
 class Algorithm:
 	def __init__(self, matrix):
 		self.matrix = matrix
@@ -671,79 +422,342 @@ class Algorithm:
 			rows.append(newrow)
 		return Matrix(rows)	
 		
-class Solver:
+	def _A_ij(self, i, j):
+		if not (i >= 0 and i < self.matrix.rows()):
+			raise ValueError("i out of bounds")
+		if not (j >= 0 and j < self.matrix.cols()):
+			raise ValueError("j out of bounds")
+		if i == 0:
+			m1 = self.cut(top = 1)
+		elif i == self.matrix.rows() - 1:
+			m1 = self.cut(bottom = self.matrix.rows() - 1)
+		else:
+			tm1 = self.cut(bottom = i)
+			tm2 = self.cut(top = i + 1)
+			m1 = stackv(tm1, tm2)
+		if j == 0:
+			m2 = Algorithm(m1).cut(left = 1)
+		elif j == m1.cols() - 1:
+			m2 = Algorithm(m1).cut(right = m1.cols() - 1)
+		else:
+			tm1 = Algorithm(m1).cut(right = j)
+			tm2 = Algorithm(m1).cut(left = j + 1)
+			m2 = stackh(tm1, tm2)
+		return m2
+		
+	def determinant(self):
+		if not self.matrix.is_square():
+			raise DeterminantError()
+		if self.matrix.rows() == 1:
+			return self.matrix[(0,0)]
+		i = 0
+		sum = 0
+		for j in xrange(self.matrix.rows()):
+			if self.matrix[(i,j)] == 0:
+				continue
+			value = (-1) ** (i + j) * self.matrix[(i,j)] * Algorithm(self._A_ij(i, j)).determinant()
+			sum += value
+		return sum
+		
+	def adjugate(self):
+		if not self.matrix.is_square():
+			raise DeterminantError()
+		rows = []
+		for i in xrange(self.matrix.rows()):
+			row = []
+			for j in xrange(self.matrix.rows()):
+				value = (-1) ** (i + j) * Algorithm(self._A_ij(j, i)).determinant()
+				row.append(value)
+			rows.append(row)
+		return Matrix(rows)	
+		
+	def inverse(self):
+		if not self.matrix.is_square():
+			raise InverseError()
+		if self.matrix.rows() == 1:
+			return Matrix([[operator.truediv(1,self.matrix[(0,0)])]])
+		d = self.determinant()
+		if abs(d) < 10**-4:
+			raise Exception('Matrix is not invertible')
+		return operator.truediv(1,d) * self.adjugate()
+	
+	def find_in_diagonal(self, number):
+		for index in xrange(self.matrix.rows()):
+			if self.matrix[(index, index)] != number:
+				return index 
+		return self.matrix.rows()
+
+	def smith_form(self):
+		m = copy.deepcopy(self.matrix)
+		U, G, V = Solver(m).smith_form()
+		return U, G, V
+
+	def eigenvalues(self):
+		return Mat(self.matrix.matrix).eigenvals()
+		
+class DigitSet:
+	def __init__(self, matrix, digitSet = set(), jcan = 0, jsym = 0):
+		self.matrix = matrix
+		self.size = abs(Algorithm(self.matrix).determinant())
+		self.set = set()
+		if len(digitSet) != 0:
+			self.set = digitSet
+		elif jcan:
+			self.get_j_canonical(jcan)
+		elif jsym:
+			self.get_j_symmetric(jsym)
+			
+	def __str__(self):
+		return repr(self.set)
+		
+	def get_j_canonical(self, j):
+		digit = [0] * self.matrix.rows()
+		self.set.add(tuple(digit))
+		for i in xrange(1, self.size):
+			digit[j - 1] = i
+			self.set.add(tuple(digit))
+
+	def get_j_symmetric(self, j):
+		digit = [0] * self.matrix.rows()
+		self.set.add(tuple(digit))
+		min = int(math.floor(-self.size/2))
+		max = int(math.floor(self.size/2))
+		for i in xrange(min, max):
+			digit[j - 1] = i
+			self.set.add(tuple(digit))
+		
+class RadixSystem:
+	def __init__(self, matrix, digitSet = {}, lattice={}, jcan = 0, jsym = 0):
+		if isinstance(matrix, int):
+			matrix = Matrix([[matrix]])
+		if isinstance(matrix, Matrix):
+			if not matrix.is_square():
+				raise DeterminantError()
+			if Algorithm(matrix).determinant() == 0:
+				raise InverseError()
+		self.lattice = lattice
+		self.matrix = matrix
+		if len(digitSet) != 0:
+			self.digitSet = digitSet
+		elif jcan:
+			self.digitSet = DigitSet(self.matrix, jcan = jcan).set
+		elif jsym:
+			self.digitSet = DigitSet(self.matrix, jsym = jsym).set
+		self.smithForm = SmithForm(matrix)
+		self.hashTable = self.create_hash_table()
+		
+	def hash_function(self, z):
+		s = Algorithm(self.smithForm.G).find_in_diagonal(1)
+		Uz = self.smithForm.U * z
+		return sum((Uz[(i,0)] % self.smithForm.G[(i,i)]) * prod(self.smithForm.G[(j,j)] for j in range(s, i)) for i in range(s, Uz.rows()))
+	
+	def create_hash_table(self):
+		hashTable = [None] * len(self.digitSet)
+		for digit in self.digitSet:
+			hashTable[self.hash_function(digit)] = digit;
+		return hashTable
+
+	def is_congruent(self, elementOne, elementTwo):
+		return self.hash_function(elementOne) == self.hash_function(elementTwo)
+		
+	def find_congruent(self, element):
+		return self.hashTable[self.hash_function(element)]
+				
+	def is_complete_residues_system(self):
+		for digit in self.digitSet:
+			if any(self.is_congruent(digit, other) for other in self.digitSet - {digit}):
+				return False
+		return True
+
+	def necessary_condition(self):
+		if self.matrix.is_expansive() and self.is_complete_residues_system():
+			return True
+		else:
+			return False
+		
+class NumberSystem(RadixSystem):
+	def __init__(self, matrix, digitSet = {}, lattice={}, jcan = 0, jsym = 0):
+		RadixSystem.__init__(self, matrix, digitSet, lattice, jcan, jsym)
+		self.M_inv = Algorithm(self.matrix).inverse()
+		self.C_con = self.find_c()
+		self.gamma = self.find_gamma()
+
+	def __str__(self):
+		print self.matrix
+		print repr(self.digitSet)
+		return ""
+		
+	def unit_condition(self):
+		n = self.matrix.rows()
+		tmp = self.matrix.identity(n) - self.matrix
+		return abs(Algorithm(tmp).determinant()) != 1
+
+	def necessary_condition(self):
+		if self.matrix.is_expansive() and self.is_complete_residues_system() and self.unit_condition():
+			return True
+		else:
+			return False
+			
+	def phi(self, element, n = 1, save = False):
+		digSet = []
+		for i in range(n):
+			d = self.find_congruent(element)
+			digSet.append(element)
+			if self.matrix.is_scalar_element(element):
+				k = self.M_inv * (element - d)
+				element = int(k[(0,0)])
+			elif isinstance(element, tuple):
+				k = self.M_inv * tuple(map(lambda x, y: x - y, element, d))
+				element = k.to_int().to_tuple()
+		if save:
+			return digSet
+		else:
+			return element
+		
+	def find_c(self):
+		c = 1
+		while not Algorithm(self.matrix ** -c).norm("inf") < 0.001:
+			c += 1
+		return c
+		
+	def find_gamma(self):
+		norm = Algorithm(self.matrix ** -self.C_con).norm("inf")
+		gamma = 1 / (1 - norm)
+		return gamma
+	
+	def calculate_fundamental_matrix(self, digit):
+		matrix = Matrix(self.matrix.rows(),1)
+		for j in xrange(1, self.C_con + 1):
+			matrix = stackh(matrix, (self.matrix ** -j) * digit)
+		matrix = Algorithm(matrix).cut(left=1)
+		return matrix
+		
+	def calculate_fundamental_minmax(self, func):
+		minmax = Matrix(self.matrix.rows(), self.C_con)	
+		matrices = []
+		for digit in self.digitSet:
+			matrices.append(self.calculate_fundamental_matrix(digit))
+		for i in xrange(minmax.rows()):
+			for j in xrange(minmax.cols()):
+				minmax[(i,j)] = func(matrix[(i,j)] for matrix in matrices)
+		return minmax
+		
+	def calculate_fundamental_box_border(self, type = "periodic"):
+		min_mat = Algorithm(self.calculate_fundamental_minmax(min)).transpose()
+		max_mat = Algorithm(self.calculate_fundamental_minmax(max)).transpose()
+		sum_min = sum((Matrix.read_tuple(tuple(col)) for col in min_mat.matrix), Matrix(self.matrix.rows(), 1))
+		sum_max = sum((Matrix.read_tuple(tuple(col)) for col in max_mat.matrix), Matrix(self.matrix.rows(), 1))
+		if type == "original" or type == 1:
+			l = self.gamma * sum_min
+			u = self.gamma * sum_max
+		if type == "round" or type == 2:
+			l = ((self.gamma * sum_min).to_int(math.ceil))
+			u = ((self.gamma * sum_max).to_int(math.floor))
+		if type == "periodic" or type == 3:
+			l = - ((self.gamma * sum_min).to_int(math.ceil))
+			u = - ((self.gamma * sum_max).to_int(math.floor))
+		return l, u
+		
+	def classify(self):
+		finished = []
+		cycles = []
+		points = []
+		l, u = self.calculate_fundamental_box_border()
+		for i in range(u[(0,0)], l[(0,0)]+1):
+			for j in range(u[(1,0)], l[(1,0)]+1):
+				points.append((i,j))
+		for z in points:
+			if z not in finished:
+				orbit = []
+				while z not in finished and z in points:
+					orbit.append(z)
+					finished.append(z)
+					z = self.phi(z)
+				if z in orbit:
+					cycles.append(self.get_cycle(z))
+		return cycles
+		
+	def get_cycle(self, element):
+		cycle = []
+		while element not in cycle:
+			cycle.append(element)
+			element = self.phi(element)
+		return cycle
+	
+class SmithForm:
 	def __init__(self, matrix):
 		self.matrix = matrix
-		self.S = None;
-		self.J = None;
-		self.T = None;
+		self.G = copy.deepcopy(self.matrix)
+		self.U = Matrix.identity(self.matrix.rows())
+		self.V = Matrix.identity(self.matrix.cols())
+		self.smith_form()
 
-	def cSwap(self,i,j):
-		for k in range(self.J.rows()):
-			temp = self.J[(k, i)]
-			self.J[(k,i)] = self.J[(k,j)]
-			self.J[(k,j)] = temp
-		adjustment = Matrix.identity(self.T.rows())
+	def cSwap(self, i, j):
+		for k in range(self.G.rows()):
+			temp = self.G[(k, i)]
+			self.G[(k,i)] = self.G[(k,j)]
+			self.G[(k,j)] = temp
+		adjustment = Matrix.identity(self.V.rows())
 		adjustment[(i,i)] = 0
 		adjustment[(j,j)] = 0
 		adjustment[(i,j)] = 1
 		adjustment[(j,i)] = 1
-		self.T = self.T*adjustment
+		self.V = self.V * adjustment
 
-	def cLC(self,I,i,j,a,b,gcd=None):
-		if gcd is None or a==1 or a==-1:
+	def cLC(self, I, i, j, a, b, gcd = None):
+		if gcd is None or abs(a) == 1:
 			c = 0
 			d = 1
 		else:
-			c = -self.J[(I,j)]/gcd
-			d = self.J[(I,i)]/gcd
+			c = -self.G[(I,j)] / gcd
+			d = self.G[(I,i)] / gcd
 		temp = []
-		for k in range(self.J.rows()):
-			temp = self.J[(k,i)]
-			self.J[(k,i)] = a*self.J[(k,i)] + b*self.J[(k,j)]
-			self.J[(k,j)] = c*temp + d*self.J[(k,j)]
-		adjustment = Matrix.identity(self.T.rows())
+		for k in range(self.G.rows()):
+			temp = self.G[(k,i)]
+			self.G[(k,i)] = a * self.G[(k,i)] + b * self.G[(k,j)]
+			self.G[(k,j)] = c * temp + d * self.G[(k,j)]
+		adjustment = Matrix.identity(self.V.rows())
 		adjustment[(i,i)] = a
-		if i!=j:
+		if i != j:
 			adjustment[(j,i)] = b 
 			adjustment[(i,j)] = c
 			adjustment[(j,j)] = d
-		assert adjustment.determinant()== 1 or adjustment.determinant()== -1
-		self.T = self.T*adjustment
+		assert Algorithm(adjustment).determinant() == 1 or Algorithm(adjustment).determinant() == -1
+		self.V = self.V * adjustment
 
-	def rSwap(self,i,j):
-		for k in range(self.J.cols()):
-			temp = self.J[(i, k)]
-			self.J[(i,k)] = self.J[(j,k)]
-			self.J[(j,k)] = temp
-		adjustment = Matrix.identity(self.S.rows())
+	def rSwap(self, i, j):
+		for k in range(self.G.cols()):
+			temp = self.G[(i, k)]
+			self.G[(i,k)] = self.G[(j,k)]
+			self.G[(j,k)] = temp
+		adjustment = Matrix.identity(self.U.rows())
 		adjustment[(i,j)] = 1
 		adjustment[(j,i)] = 1
 		adjustment[(i,i)] = 0
 		adjustment[(j,j)] = 0
-		self.S = adjustment*self.S
+		self.U = adjustment * self.U
 
-	def rLC(self,I,i,j,a,b,gcd=None):
-		if (gcd is None or a==1 or a==-1):
-			c=0
-			d=1
+	def rLC(self, I, i, j, a, b, gcd = None):
+		if (gcd is None or abs(a) == 1):
+			c = 0
+			d = 1
 		else:
-			c = -self.J[(j,I)]/gcd
-			d = self.J[(i,I)]/gcd
-		for k in range(self.J.cols()):
-			temp = self.J[(i,k)]
-			self.J[(i,k)] = a*self.J[(i,k)] + b*self.J[(j,k)]
-			self.J[(j,k)] = c*temp + d*self.J[(j,k)]
-		adjustment = Matrix.identity(self.S.rows())
+			c = -self.G[(j,I)] / gcd
+			d = self.G[(i,I)] / gcd
+		for k in range(self.G.cols()):
+			temp = self.G[(i,k)]
+			self.G[(i,k)] = a * self.G[(i,k)] + b * self.G[(j,k)]
+			self.G[(j,k)] = c * temp + d * self.G[(j,k)]
+		adjustment = Matrix.identity(self.U.rows())
 		adjustment[(i,i)] = a
-		if i!=j:
+		if i != j:
 			adjustment[(i,j)] = b 
 			adjustment[(j,i)] = c
 			adjustment[(j,j)] = d
-		assert adjustment.determinant() == 1 or adjustment.determinant() == -1
-		self.S = adjustment*self.S
+		assert Algorithm(adjustment).determinant() == 1 or Algorithm(adjustment).determinant() == -1
+		self.U = adjustment * self.U
 
-	def euclid(self,a, b):
+	def euclid(self, a, b):
 		x0 = 1
 		x1 = 0
 		y0 = 0
@@ -763,18 +777,14 @@ class Solver:
 		return [a, x0, y0]
 
 	def smith_form(self):
-		self.J = copy.deepcopy(self.matrix)
-		self.S = Matrix.identity(self.matrix.rows())
-		self.T = Matrix.identity(self.matrix.cols())
-
-		for i in range(min(self.J.rows(),self.J.rows())):
-			if self.J[(i,i)] == 0: 
+		for i in range(min(self.G.rows(),self.G.rows())):
+			if self.G[(i,i)] == 0: 
 				foundReplacement = False;
-				for j in range(i, self.J.rows()):
+				for j in range(i, self.G.rows()):
 					if foundReplacement:
 						break
-					for k in range(i,self.J.cols()):
-						if (self.J[(j,k)] != 0):
+					for k in range(i,self.G.cols()):
+						if (self.G[(j,k)] != 0):
 							foundReplacement = True
 							break
 				if not foundReplacement:
@@ -782,78 +792,76 @@ class Solver:
 				else:
 					self.rSwap(i,j)
 					self.cSwap(i,k)
-			gcd=self.J[(i,i)]
+			gcd=self.G[(i,i)]
 			doneIteration = False
 			while not doneIteration:
-				if (self.J[(i,i)]==1 or self.J[(i,i)]==-1):
+				if (abs(self.G[(i,i)]) == 1):
 					break
 				doneIteration = True
-				for j in range(i+1, self.J.rows()):
-					gcd, x, y = self.euclid(self.J[(i,i)], self.J[(j,i)])
+				for j in range(i+1, self.G.rows()):
+					gcd, x, y = self.euclid(self.G[(i,i)], self.G[(j,i)])
 					if (gcd < 0):
 						gcd = -gcd
 						x = -x
 						y = -y
-					if gcd == self.J[(i,i)]:
+					if gcd == self.G[(i,i)]:
 						pass
-					elif gcd == self.J[(j,i)]:
+					elif gcd == self.G[(j,i)]:
 						self.rSwap(i,j)
-						doneIteration=False
-					elif gcd == -self.J[(j,i)]:
+						doneIteration = False
+					elif gcd == -self.G[(j,i)]:
 						self.rSwap(i,j)
-						self.rLC(i,i,i,-1, 0,gcd)
-						doneIteration=False
-					elif gcd < J[(i,i)] or gcd < -self.J[(i,i)]:
+						self.rLC(i, i, i, -1, 0, gcd)
+						doneIteration = False
+					elif gcd < self.G[(i,i)] or gcd < -self.G[(i,i)]:
 						self.rLC(i, i, j, x, y, gcd)
-						doneIteration=False
-				for j in range(i+1, self.J.cols()):
-					gcd, x, y = self.euclid(self.J[(i,i)], self.J[(i,j)])
+						doneIteration = False
+				for j in range(i+1, self.G.cols()):
+					gcd, x, y = self.euclid(self.G[(i,i)], self.G[(i,j)])
 					if (gcd < 0):
 						gcd = -gcd
 						x = -x
 						y = -y
-					if gcd == self.J[(i,i)]:
+					if gcd == self.G[(i,i)]:
 						pass
-					elif gcd == self.J[(i,j)]:
+					elif gcd == self.G[(i,j)]:
 						self.cSwap(i,j)
-						doneIteration=False
-					elif gcd == -self.J[(i,j)]: #TODO WORK THIS BLOCK
+						doneIteration = False
+					elif gcd == -self.G[(i,j)]: #TODO WORK THIS BLOCK
 						self.cSwap(i,j)
-						self.cLC(i,i,i,-1, 0,gcd)
-						doneIteration=False
-					elif gcd < self.J[(i,i)] or gcd < -self.J[(i,i)]:
+						self.cLC(i, i, i, -1, 0, gcd)
+						doneIteration = False
+					elif gcd < self.G[(i,i)] or gcd < -self.G[(i,i)]:
 						self.cLC(i, i, j, x, y, gcd)
-						doneIteration=False
+						doneIteration = False
 			doneZeroing = False
 			while not doneZeroing:
 				doneZeroing = True
-				for j in range(i+1, self.J.rows()):
-					if self.J[(j,i)] != 0:
-						self.rLC(i,j,i,1,-self.J[(j,i)]/self.J[(i,i)])
-						if self.J[(j,i)] != 0:
+				for j in range(i+1, self.G.rows()):
+					if self.G[(j,i)] != 0:
+						self.rLC(i, j, i, 1, -self.G[(j,i)] / self.G[(i,i)])
+						if self.G[(j,i)] != 0:
 							doneZeroing = False
-
-				for j in range(i+1, self.J.cols()):
-					if self.J[(i,j)] != 0:
-						self.cLC(i,j,i,1,-self.J[(i,j)]/self.J[(i,i)])
-						if self.J[(i,j)] != 0:
+				for j in range(i+1, self.G.cols()):
+					if self.G[(i,j)] != 0:
+						self.cLC(i, j, i, 1, -self.G[(i,j)] / self.G[(i,i)])
+						if self.G[(i,j)] != 0:
 							doneZeroing = False
+		for i in range(min(self.G.cols(), self.G.rows())-1):
+			if self.G[(i+1, i+1)] == 0:
+				return self.U, self.G, self.V
+			gcd, x, y = self.euclid(self.G[(i,i)], self.G[(i+1,i+1)])
 
-		for i in range(min(self.J.cols(), self.J.rows())-1):
-			if self.J[(i+1,i+1)] == 0:
-				return self.S,self.J,self.T
-			gcd, x, y = self.euclid(self.J[(i,i)], self.J[(i+1,i+1)])
-
-			if (gcd == self.J[(i+1,i+1)]):
+			if (gcd == self.G[(i+1,i+1)]):
 				self.cSwap(i, i+1)
 				self.rSwap(i, i+1)
-			elif (gcd != self.J[(i,i)]):
+			elif (gcd != self.G[(i,i)]):
 				self.rLC(i,i, i+1, 1, 1) 
 				self.cLC(i, i, i+1, x, y, gcd)
-				self.cLC(i, i+1, i, 1, -self.J[(i,i+1)]/self.J[(i,i)])
-				self.rLC(i, i+1, i, 1, -self.J[(i+1,i)]/self.J[(i,i)])
-		return self.S,self.J,self.T
-				
+				self.cLC(i, i+1, i, 1, -self.G[(i,i+1)] / self.G[(i,i)])
+				self.rLC(i, i+1, i, 1, -self.G[(i+1,i)] / self.G[(i,i)])
+		return self.U, self.G, self.V
+"""			
 class MatrixTests(unittest.TestCase):
 	def setUp(self):
 		self.v1 = Matrix([[1, 2, 3]])
@@ -906,7 +914,141 @@ class MatrixTests(unittest.TestCase):
 			self.m1 * self.m3
 		with self.assertRaises(MatrixMultiplicationError):
 			self.v1 * self.v2
+"""
+class MatrixTests(unittest.TestCase):
+	def setUp(self):
+		self.c0 = Matrix([[0]])
+		self.c1 = Matrix([[1]])
+		self.c2 = Matrix([[10]])
+		self.c3 = Matrix([[-1]])
 
+		self.v0 = Matrix([[0, 0]])
+		self.v1 = Matrix([[1, 2]])
+		self.v2 = Matrix([[1, 2, 3]])
+		self.v3 = Matrix([[1, -2, 3, -4]])
+		
+		self.v4 = Matrix([[0], [0]])
+		self.v5 = Matrix([[1], [2]])
+		self.v6 = Matrix([[1], [2], [3]])
+		self.v7 = Matrix([[1], [-2], [3], [-4]])
+		
+		self.m0 = Matrix([[0, 0], [0, 0]])
+		self.m1 = Matrix([[1, 0], [0, 1]])
+		self.m2 = Matrix([[1, 2], [2, 3]])
+		self.m3 = Matrix([[4, -2], [-2, 3]])
+		
+		self.m4 = Matrix([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+		self.m5 = Matrix([[6, 1, 1], [4,-2, 5], [2, 8, 7]])
+		self.m6 = Matrix([[1, 3, 3], [1, 4, 3], [1, 3, 4]])
+		self.m7 = Matrix([[1, 2, 3], [0, 1, 4], [5, 6, 0]])
+		
+		self.m8 = Matrix([[4, 1, -7, 2], [-1, 9, 6, 3]])
+		self.m9 = Matrix([[8, -3, 1], [4, -6, 2], [7, 3, 5], [-2, -5, 1]])
+		
+	def testEq(self):
+		self.assertEqual(self.c0, 0)
+		self.assertEqual(self.c1, 1)
+		self.assertEqual(self.c2, 10)
+		self.assertEqual(self.c3, -1)
+		self.assertEqual(self.c0, self.c0)
+		self.assertEqual(self.c3, -1)
+		self.assertEqual(self.c3, -1)
+		self.assertEqual(self.c3, -1)
+			
+class NumberSystemTests(unittest.TestCase):
+	def setUp(self):
+		self.mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
+		self.mat2 = Matrix([[1,1,1],[4,-2,5],[2,8,7]])
+		self.mat3 = Matrix([[1,1,1],[4,1,5],[2,8,7]])
+		self.mat4 = Matrix([[1,1,1],[4,1,5],[2,8,1]])
+		
+		self.numsys1 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,9})
+		self.numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+		self.numsys3 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,18})
+		self.numsys4 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,39})
+		self.numsys5 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(1,1),(1,0)})
+		self.numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
+		self.numsys7 = NumberSystem(3, {-2,0,2})
+		self.numsys8 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
+			
+	def testUnitCondition(self):
+		self.assertTrue(self.numsys1.unit_condition())
+		self.assertTrue(self.numsys2.unit_condition())
+	
+	def testPhi(self):
+		self.assertEqual(self.numsys1.phi(123456789, 0), 123456789)
+		self.assertEqual(self.numsys1.phi(123456789, 1), 12345678)
+		self.assertEqual(self.numsys1.phi(123456789, 2), 1234567)
+		self.assertEqual(self.numsys1.phi(123456789, 5), 1234)
+		self.assertEqual(self.numsys1.phi(123456789, 8), 1)
+		self.assertEqual(self.numsys1.phi(123456789, 9), 0)
+	
+	def testCheck(self):
+		self.assertTrue(self.numsys1.necessary_condition())
+		self.assertTrue(self.numsys2.necessary_condition())
+		self.assertFalse(self.numsys3.necessary_condition())
+		self.assertTrue(self.numsys4.necessary_condition())
+		self.assertTrue(self.numsys5.necessary_condition())
+		
+	def testCalculatingBox(self):
+		self.assertEqual(self.numsys2.calculate_fundamental_box_border(2), (Matrix([[0],[0]]),Matrix([[0],[0]])))
+		self.assertEqual(self.numsys1.calculate_fundamental_box_border(2), (Matrix([[0]]),Matrix([[0]])))
+		self.assertEqual(self.numsys7.calculate_fundamental_box_border(2), (Matrix([[-1]]),Matrix([[1]])))
+		self.assertEqual(self.numsys6.calculate_fundamental_box_border(2), (Matrix([[-2],[-1]]),Matrix([[0],[0]])))
+		self.assertEqual(self.numsys8.calculate_fundamental_box_border(2), (Matrix([[0],[-2]]),Matrix([[2],[0]])))
+		
+class RadixSystemTests(unittest.TestCase):
+	def setUp(self):
+		self.numsys1 = RadixSystem(10, {0,1,2,3,4,5,6,7,8,9})
+		self.numsys2 = RadixSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
+		self.numsys3 = RadixSystem(10, {0,1,2,3,4,5,6,7,8,18})
+		self.numsys4 = RadixSystem(10, {0,1,2,3,4,5,6,7,8,39})
+		self.numsys5 = RadixSystem(Matrix([[-1,-1],[1,-1]]), {(1,1),(1,0)})
+		self.numsys6 = RadixSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
+		self.numsys7 = RadixSystem(3, {-2,0,2})
+		self.numsys8 = RadixSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
+
+	def testIsCongruent(self):		
+		self.assertTrue(self.numsys1.is_congruent(10,0))
+		self.assertTrue(self.numsys1.is_congruent(14,4))
+		self.assertTrue(self.numsys1.is_congruent(6,36))
+		self.assertFalse(self.numsys1.is_congruent(13,12))
+		self.assertFalse(self.numsys1.is_congruent(66,43))
+		self.assertFalse(self.numsys2.is_congruent((0,0),(1,0)))
+		
+	def testFindCongruent(self):
+		self.assertEqual(self.numsys1.find_congruent(13), 3)
+		self.assertEqual(self.numsys1.find_congruent(15), 5)
+		self.assertEqual(self.numsys1.find_congruent(64), 4)
+		self.assertEqual(self.numsys1.find_congruent(8486), 6)
+		
+		self.assertEqual(self.numsys2.find_congruent((0,1)), (1,0))
+		self.assertEqual(self.numsys2.find_congruent((1,1)), (0,0))
+	
+	def testIsCompleteResiduesSystem(self):
+		self.assertTrue(self.numsys1.is_complete_residues_system())
+		self.assertTrue(self.numsys2.is_complete_residues_system())
+		self.assertFalse(self.numsys3.is_complete_residues_system())
+		self.assertTrue(self.numsys4.is_complete_residues_system())
+		self.assertTrue(self.numsys5.is_complete_residues_system())
+
+class AlgorithmTests(unittest.TestCase):
+	def setUp(self):
+		self.v1 = Algorithm(Matrix([[1, 2, 3]]))
+		self.v2 = Algorithm(Matrix([[4, 5, 6]]))
+		self.v3 = Algorithm(Matrix([[1], [2], [3]]))
+		
+		self.c1 = Algorithm(Matrix([[10]]))
+		self.c2 = Algorithm(Matrix([[0]]))
+		
+		self.m1 = Algorithm(Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+		self.m2 = Algorithm(Matrix([[4, 1, -7, 2], [-1, 9, 6, 3]]))
+		self.m3 = Algorithm(Matrix([[8, -3, 1], [4, -6, 2], [7, 3, 5], [-2, -5, 1]]))
+		self.m4 = Algorithm(Matrix([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
+		self.m5 = Algorithm(Matrix([[6, 1, 1], [4,-2, 5], [2, 8, 7]]))
+		self.m6 = Algorithm(Matrix([[1, 3, 3], [1, 4, 3], [1, 3, 4]]))
+		self.m7 = Algorithm(Matrix([[1, 2, 3], [0, 1, 4], [5, 6, 0]]))
+		
 	def testDet(self):
 		self.assertEqual(self.m1.determinant(), 1)
 		self.assertEqual(self.m4.determinant(), 0)
@@ -949,93 +1091,7 @@ class MatrixTests(unittest.TestCase):
 		#self.assertAlmostEqual(self.m5.norm(2), 11.7476)
 		self.assertAlmostEqual(self.m5.norm("inf"), 17)
 		self.assertAlmostEqual(self.m5.norm("fro"), 14.1421, 3)
-			
-class NumberSystemTests(unittest.TestCase):
-	def setUp(self):
-		self.mat1 = Matrix([[6,1,1],[4,-2,5],[2,8,7]])
-		self.mat2 = Matrix([[1,1,1],[4,-2,5],[2,8,7]])
-		self.mat3 = Matrix([[1,1,1],[4,1,5],[2,8,7]])
-		self.mat4 = Matrix([[1,1,1],[4,1,5],[2,8,1]])
 		
-		self.numsys1 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,9})
-		self.numsys2 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)})
-		self.numsys3 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,18})
-		self.numsys4 = NumberSystem(10, {0,1,2,3,4,5,6,7,8,39})
-		self.numsys5 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(1,1),(1,0)})
-		self.numsys6 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		self.numsys7 = NumberSystem(3, {-2,0,2})
-		self.numsys8 = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})
-			
-	def testFindInDiagonal(self):
-		self.assertEqual(self.numsys1.find_in_diagonal(self.mat1, 1), 0)
-		self.assertEqual(self.numsys1.find_in_diagonal(self.mat2, 1), 1)
-		self.assertEqual(self.numsys1.find_in_diagonal(self.mat3, 1), 2)
-		self.assertEqual(self.numsys1.find_in_diagonal(self.mat4, 1), 3)
-
-	def testIsCongruent(self):		
-		self.assertTrue(self.numsys1.is_congruent(10,0))
-		self.assertTrue(self.numsys1.is_congruent(14,4))
-		self.assertTrue(self.numsys1.is_congruent(6,36))
-		self.assertFalse(self.numsys1.is_congruent(13,12))
-		self.assertFalse(self.numsys1.is_congruent(66,43))
-		
-		self.assertFalse(self.numsys2.is_congruent((0,0),(1,0)))
-
-	def testFindCongruent(self):
-		self.assertEqual(self.numsys1.find_congruent(13), 3)
-		self.assertEqual(self.numsys1.find_congruent(15), 5)
-		self.assertEqual(self.numsys1.find_congruent(64), 4)
-		self.assertEqual(self.numsys1.find_congruent(8486), 6)
-		
-		self.assertEqual(self.numsys2.find_congruent((0,1)), (1,0))
-		self.assertEqual(self.numsys2.find_congruent((1,1)), (0,0))
-	
-	def testIsCompleteResiduesSystem(self):
-		self.assertTrue(self.numsys1.is_complete_residues_system())
-		self.assertTrue(self.numsys2.is_complete_residues_system())
-		self.assertFalse(self.numsys3.is_complete_residues_system())
-		self.assertTrue(self.numsys4.is_complete_residues_system())
-		self.assertTrue(self.numsys5.is_complete_residues_system())
-	
-	def testUnitCondition(self):
-		self.assertTrue(self.numsys1.unit_condition())
-		self.assertTrue(self.numsys2.unit_condition())
-		
-	def testIsExpansive(self):
-		self.assertTrue(self.numsys1.is_expansive())
-		self.assertTrue(self.numsys2.is_expansive())
-	
-	def testPhi(self):
-		self.assertEqual(self.numsys1.phi(123456789, 0), 123456789)
-		self.assertEqual(self.numsys1.phi(123456789, 1), 12345678)
-		self.assertEqual(self.numsys1.phi(123456789, 2), 1234567)
-		self.assertEqual(self.numsys1.phi(123456789, 5), 1234)
-		self.assertEqual(self.numsys1.phi(123456789, 8), 1)
-		self.assertEqual(self.numsys1.phi(123456789, 9), 0)
-	
-	def testCheck(self):
-		self.assertTrue(self.numsys1.check())
-		self.assertTrue(self.numsys2.check())
-		self.assertFalse(self.numsys3.check())
-		self.assertTrue(self.numsys4.check())
-		self.assertTrue(self.numsys5.check())
-		
-	def testCalculatingBox(self):
-		self.assertEqual(self.numsys2.calculate_box(), (Matrix([[0],[0]]),Matrix([[0],[0]])))
-		self.assertEqual(self.numsys1.calculate_box(), (Matrix([[0]]),Matrix([[0]])))
-		self.assertEqual(self.numsys7.calculate_box(), (Matrix([[-1]]),Matrix([[1]])))
-		self.assertEqual(self.numsys6.calculate_box(), (Matrix([[-2],[-1]]),Matrix([[0],[0]])))
-		self.assertEqual(self.numsys8.calculate_box(), (Matrix([[0],[-2]]),Matrix([[2],[0]])))
-		
-class AlgorithmTests(unittest.TestCase):
-	def setUp(self):
-		self.al = Algorithm(Matrix([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-		
-	def testNorm(self):
-		self.assertAlmostEqual(self.al.norm(1), 1)
-		#self.assertAlmostEqual(self.m1.norm(2), 1)
-		self.assertAlmostEqual(self.al.norm("inf"), 1)
-		self.assertAlmostEqual(self.al.norm("fro"), 1.732, 3)
 		
 def stackh(*matrices):
 	assert len(matrices) > 0, 'Can\'t stack zero matrices'
@@ -1067,7 +1123,7 @@ def stackv(*matrices):
 def prod(iterable):
     return reduce(operator.mul, iterable, 1)
 
-test = True
+test = False
 
 if __name__ == "__main__":
 	if test:
@@ -1078,11 +1134,16 @@ if __name__ == "__main__":
 		numsys1 = NumberSystem(Matrix([[-1,-1],[1,-1]]), {(0,0),(1,0)}) 					#(0,0)-(0,0)
 		numsys2 = NumberSystem(Matrix([[3]]), {-2,0,2})										#(-1)-(1)
 		numsys3 = NumberSystem(Matrix([[0,-3],[1,0]]), {(0,0),(1,0),(-1,1)})				#
-		numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})	#(0,-2)-(2,0)
+		#numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(2,0),(3,0),(4,0)})	#(0,-2)-(2,0)
+		numsys4a = NumberSystem(Matrix([[2,-1],[1,2]]), jcan=1)	#(0,-2)-(2,0)
 		numsys4b1 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1),(-1,-1),(1,-1),(-1,1)}) #(-0.5,-0.5)-(0.5,0.5)
 		numsys4b2 = NumberSystem(Matrix([[3,0],[0,3]]), {(0,0),(1,0),(2,0),(0,1),(0,2),(1,2),(2,1),(-1,2),(-2,1)}) #(-1,0)-(1,1)
 		numsys5 = NumberSystem(Matrix([[1,-2],[1,1]]), {(0,0),(1,0),(-1,0)})				#
 		numsys7 = NumberSystem(Matrix([[-3,-1],[1,-3]]), {(0,0),(1,0),(2,0),(3,0),(4,0),(5,0),(6,0),(7,0),(8,0),(9,0)})				#?
 		numsys8a = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-6,-5)})	#
 		numsys8b = NumberSystem(Matrix([[2,-1],[1,2]]), {(0,0),(1,0),(0,1),(0,-1),(-2,-3)})
-		print numsys8a.classify()
+		
+		#print Encoder("Phyllorhiza_punctata.txt", True)
+		
+		print NumberSystem(Matrix.companion([4, -4, 1]), jcan=1).necessary_condition()
+
