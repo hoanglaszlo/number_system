@@ -377,6 +377,7 @@ class Algorithm:
 		elif self.matrix.is_column_vector():
 			return math.sqrt(sum(tuple(map(lambda x: abs(x ** 2), self.matrix.col(0)))))
 
+		
 	def _norm_inf(self):
 		max = -1
 		for i in xrange(self.matrix.rows()):
